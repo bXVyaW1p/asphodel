@@ -568,7 +568,7 @@ const CustomEnumSetting = StructType({
 const SettingInfo = StructType({
     name: ref.refType("uint8"),
     name_length: "uint8",
-    default_bytes: "void*",
+    default_bytes: ArrayType("uint8"),
     default_bytes_length: "uint8",
     setting_type: "uint8",
     u: UnionType({
@@ -1130,6 +1130,50 @@ export function loadAsphodelLibrary(path: string) {
 import * as os from 'node:os'
 
 
+export class API {
+    lib: any
+    constructor(lib: any) {
+        this.lib = lib
+    }
+
+    public getErrorName(code: number) {
+        return this.lib.asphodel_error_name(code)
+    }
+
+    public getUnitTypeName(unit_type: number) {
+        return this.lib.asphodel_unit_type_name(unit_type)
+    }
+
+    public getUnitTypeCount() {
+        return this.lib.asphodel_get_unit_type_count();
+    }
+
+    public getChannelTypeName(channel_type: number) {
+        return this.lib.asphodel_channel_type_name(channel_type)
+    }
+
+    public getChannelTypeCount() {
+        return this.lib.asphodel_get_channel_type_count()
+    }
+
+    public getSettingTypeName(channel_type: number) {
+        return this.lib.asphodel_setting_type_name(channel_type)
+    }
+
+    public getSettingTypeCount() {
+        return this.lib.asphodel_get_setting_type_count()
+    }
+}
+
+
+function checkForError(lib: any, code: number) {
+    let api = new API(lib)
+    if(code != 0) {
+        throw new Error(api.getErrorName(code))
+    }
+}
+
+
 export class ByteSettingWrapper {
     inner: any
 
@@ -1390,39 +1434,14 @@ export class SettingInfoWrapper {
         }
     }
 
-    // public defaultBytes() {
-    //     let len = this.inner.deref().default_bytes_length
-    //     var resbuff = new Uint8Array(len)
-    //     let ptr = ref.alloc(ref.refType("uint8"));
-    //     ptr.writeBigUInt64LE(this.inner.deref().default_bytes)
-    //     console.log(ptr.deref())
-    //     //ref.reinterpret(this.inner.deref().default_bytes, len).copy(resbuff)
-    //     return resbuff  
-    // }
+    public defaultBytes() {
+        let len = this.inner.deref().default_bytes_length
+        var resbuff = new Uint8Array(len)
+        let ptr = this.inner.deref().default_bytes.buffer.reinterpret(len);
+        ptr.copy(resbuff)
+        return resbuff  
+    }
 }
-
-//let si = new SettingInfoWrapper();
-
-//si.defaultBytes()
-
-//console.log(si.string.a)
-//console.log(si.string.b)
-
-//
-//let sin = example.getStreamInfo()
-
-//let p1 = ref.alloc(ref.types.void)
-//p1.writeUInt64LE(sin.channel_index_list.address())
-//sin.channel_index_list.
-
-//console.log(sin.channel_index_list)
-
-//let foo = ref.reinterpret(sin.channel_index_list.buffer, 3)
-
-//let muu = new Uint8Array(3);
-
-//console.log(foo.toString("utf-8"))
-
 
 export class StreamInfoWrapper {
     inner: any
@@ -1467,38 +1486,6 @@ export class StreamInfoWrapper {
     }
 }
 
-// const example = ffi.Library("./example.so", {
-//     //'hello_world': ["void", ["string"]],  // Function with no arguments and void return type
-//     //'add_numbers': ['int', ['int', 'int']]  // Function that takes two ints and returns an int
-//     'getDevice': [Device, []],
-//     "asphodel_get_user_tag_locations_blocking": ["int", [DevicePtr, "void*"]],
-//     "asphodel_get_build_info_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
-//     "asphodel_read_nvm_section_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t]],
-//     "asphodel_usb_find_devices": ["int", ["void*", ref.refType(ffi.types.size_t)]],
-//     "asphodel_tcp_create_device": ["int", ["uint8*", "uint16", "int", "uint8*", ref.refType(DevicePtr)]],
-//     //"getSettingInfo": [ref.refType(SettingInfo), []],
-//     "getChanInfo": [ref.refType(ChannelInfo), []],
-//     "recvCI": ["void", [ArrayType(ChannelInfo)]],
-// 
-//     "getDec": [ref.refType(ChannelDecoder), []],
-//     "getSD": [ref.refType(StreamDecoder), []],
-//     "getDD": [ref.refType(DeviceDecoder), []],
-// 
-// 
-//     "getSI": [ref.refType(StreamInfo), []],
-// 
-//     "triggerCb": ["void", [ref.refType(ChannelDecoder)]],
-//     "asphodel_create_channel_decoder": ["int", [ChannelInfoPtr, "uint16", ref.refType(ChannelDecoderPtr)]],
-// 
-// 
-//     "asphodel_check_accel_self_test": ["int", [ChannelInfoPtr, "double*", "double*", "int*"]],
-// 
-// });
-
-//let sin = example.getStreamInfo()
-//let wr = new StreamInfoWrapper(sin)
-//console.log(wr.getChannelIndexList())
-
 export class ChannelDecoderWrapper {
     inner: any
     cb: any
@@ -1542,15 +1529,9 @@ export class ChannelDecoderWrapper {
 
         let strings: string[] = [];
 
-        let arch64 = ["arm64", "loong64", "ppc64", "riscv64", "x64"];
-        let a32 = false;
-        if (!arch64.includes(os.arch())) {
-            a32 = true;
-        }
-
         for (let i = 0; i < cnt; i++) {
             let b = ref.alloc(ArrayType("uint8"));
-            if (a32) {
+            if (ffi.types.size_t.size == 4) {
                 if (os.endianness() == "BE") {
                     b.writeUInt32BE(b2.readUInt32BE(i * 4))
                     let reint: Buffer = b.deref().buffer.reinterpret(128);
@@ -1758,29 +1739,6 @@ export class DeviceDecoderWrapper {
     }
 }
 
-//let dd = example.getDD();
-//let ddw = new DeviceDecoderWrapper(dd);
-
-//console.log(ddw.getStreamIds())
-//console.log(ddw.getDecoders()[0].getDecoders())
-
-//let sd = example.getSD();
-
-//let sdw = new StreamDecoderWrapper(sd);
-
-//console.log(sdw.getDecoders()[1].getSamples())
-
-//let cd = example.getDec();
-//let dw = new ChannelDecoderWrapper(cd);
-
-//dw.setDecodeCallback((a, b)=> {
-//    console.log(b)
-//})
-
-//example.triggerCb(dw.inner);
-//console.log(dw.getSubChannels())
-//dw.decode(0, new Uint8Array([1,2,3]))
-
 export class ChannelInfoWrapper {
     inner: any
     lib: any; constructor(lib: any, inner: any) {
@@ -1843,32 +1801,22 @@ export class ChannelInfoWrapper {
         let list: Buffer = this.inner.deref().chunks.buffer.reinterpret(count * ffi.types.size_t.size);
         let lengths: Buffer = this.inner.deref().chunk_lengths.buffer.reinterpret(count)
 
-        let arch64 = ["arm64", "loong64", "ppc64", "riscv64", "x64"];
-        let a32 = false;
-        if (!arch64.includes(os.arch())) {
-            a32 = true;
-        }
-
         let chunks: Uint8Array[] = []
 
         lengths.forEach((len, i) => {
 
             let b = ref.alloc(ArrayType("uint8"));
-            if (a32) {
+            if (ffi.types.size_t.size == 4) {
                 if (os.endianness() == "BE") {
-                    b.writeUInt32BE(list.readUInt32BE(i * 8))
-                    //devices.push(new DeviceWrapper(b.deref()))
+                    b.writeUInt32BE(list.readUInt32BE(i * 4))
                 } else {
-                    b.writeUInt32LE(list.readUInt32LE(i * 8))
-                    //devices.push(new DeviceWrapper(b.deref()))
+                    b.writeUInt32LE(list.readUInt32LE(i * 4))
                 }
             } else {
                 if (os.endianness() == "BE") {
                     b.writeBigUInt64BE(list.readBigUInt64BE(i * 8))
-                    //devices.push(new DeviceWrapper(b.deref()))
                 } else {
                     b.writeBigUInt64LE(list.readBigUInt64LE(i * 8))
-                    //devices.push(new DeviceWrapper(b.deref()))
                 }
             }
 
@@ -1880,25 +1828,27 @@ export class ChannelInfoWrapper {
         return chunks
     }
 
+/** Free a channel created by asphodel_get_channel() or asphodel_get_channel_blocking(). Channels created any other way
+ must NOT be used with this function. */
     public free() {
-        this.lib.asphodel_free_channel(this.inner)
+        checkForError(this.lib, this.lib.asphodel_free_channel(this.inner))
     }
 
     public getStrainBridgeCount() {
         let bc = ref.alloc("int");
-        this.lib.asphodel_get_strain_bridge_count(this.inner, bc);
+        checkForError(this.lib,this.lib.asphodel_get_strain_bridge_count(this.inner, bc));
         return bc.deref()
     }
 
     public getStrainBridgeSubchannel(bridge_index: number) {
         let si = ref.alloc(ffi.types.size_t)
-        this.lib.asphodel_get_strain_bridge_subchannel(this.inner, bridge_index, si);
+        checkForError(this.lib,this.lib.asphodel_get_strain_bridge_subchannel(this.inner, bridge_index, si));
         return si.deref();
     }
 
     public getStrainBridgeValues(bridge_index: number) {
         let fb = Buffer.alloc(ffi.types.float.size * 4)
-        this.lib.asphodel_get_strain_bridge_values(this.inner, bridge_index, fb)
+        checkForError(this.lib,this.lib.asphodel_get_strain_bridge_values(this.inner, bridge_index, fb))
         let floats = new Float32Array(4)
         for (let i = 0; i < 4; i++) {
             floats[i] = os.endianness() == "LE" ? fb.readFloatLE(i * ffi.types.float.size) : fb.readFloatBE(i * ffi.types.float.size)
@@ -1906,13 +1856,11 @@ export class ChannelInfoWrapper {
         return floats
     }
 
-
-
     public checkStrainResistances(bridge_index: number, baseline: number, positive_high: number, negative_high: number) {
         let pr = ref.alloc("double");
         let nr = ref.alloc("double");
         let p = ref.alloc("int")
-        this.lib.asphodel_check_strain_resistances(this.inner, bridge_index, baseline, positive_high, negative_high, pr, nr, p)
+        checkForError(this.lib,this.lib.asphodel_check_strain_resistances(this.inner, bridge_index, baseline, positive_high, negative_high, pr, nr, p))
         return {
             positive_resistance: pr.deref(),
             negative_resistance: nr.deref(),
@@ -1922,7 +1870,7 @@ export class ChannelInfoWrapper {
 
     public getAccelSelfTestLimits() {
         let fb = Buffer.alloc(ffi.types.float.size * 6)
-        this.lib.asphodel_get_accel_self_test_limits(this.inner, fb)
+        checkForError(this.lib,this.lib.asphodel_get_accel_self_test_limits(this.inner, fb))
         let floats = new Float32Array(6)
         for (let i = 0; i < 6; i++) {
             floats[i] = os.endianness() == "LE" ? fb.readFloatLE(i * ffi.types.float.size) : fb.readFloatBE(i * ffi.types.float.size)
@@ -1941,7 +1889,7 @@ export class ChannelInfoWrapper {
             bd.writeDoubleLE(disabled[i], i * ffi.types.double.size)
         }
         let pas = ref.alloc("int");
-        this.lib.example.asphodel_check_accel_self_test(this.inner, bd, be, pas);
+        checkForError(this.lib,this.lib.example.asphodel_check_accel_self_test(this.inner, bd, be, pas));
         return pas.deref();
     }
 
@@ -2203,14 +2151,8 @@ export class DeviceWrapper {
 
     lib: any; 
     constructor(lib: any, inner: any) {
-
         this.inner = inner; 
         this.lib = lib;
-        //console.log("returning beacuse inner is..")
-
-
-        //let device = this.lib.getDevice();
-        //this.inner = ref.alloc(Device, device);
     }
 
 
@@ -2230,9 +2172,7 @@ export class DeviceWrapper {
 
     public getSerialNumber(): string {
         let buf = Buffer.alloc(64);
-        if (this.inner.deref().get_serial_number(this.inner, buf, 64) != 0) {
-            throw new Error("Failed to get device serial number\n")
-        }
+        checkForError(this.lib,this.inner.deref().get_serial_number(this.inner, buf, 64))
         return buf.toString("utf-8")
     }
 
@@ -2245,9 +2185,7 @@ export class DeviceWrapper {
             callback(status, resbuff)
         })
 
-        if (this.inner.deref().do_transfer(this.inner, command, buf, buf.length, this.transfer_cb, buf) != 0) {
-            throw new Error("Failed to do command transfer")
-        }
+        checkForError(this.lib,this.inner.deref().do_transfer(this.inner, command, buf, buf.length, this.transfer_cb, buf))
     }
 
     public doTransferReset(command: number, parameters: number[], callback: (status: number, params: Uint8Array) => void) {
@@ -2259,9 +2197,7 @@ export class DeviceWrapper {
             callback(status, resbuff)
         })
 
-        if (this.inner.deref().do_transfer_reset(this.inner, command, buf, buf.length, this.transfer_cb, buf) != 0) {
-            throw new Error("Failed to do command transfer")
-        }
+        checkForError(this.lib,this.inner.deref().do_transfer_reset(this.inner, command, buf, buf.length, this.transfer_cb, buf))
     }
 
     public startStreamingPackets(packet_count: number, transfer_count: number, timeout: number,
@@ -2276,13 +2212,11 @@ export class DeviceWrapper {
                 callback(status, ubuf, packet_size, packet_count__);
             }
         )
-        if (this.inner.deref().start_streaming_packets(this.inner, packet_count, transfer_count, timeout, this.streaming_cb, ref.NULL) != 0) {
-            throw new Error("failed to start treaming packets")
-        }
+        checkForError(this.lib,this.inner.deref().start_streaming_packets(this.inner, packet_count, transfer_count, timeout, this.streaming_cb, ref.NULL))
     }
 
     public stopStreamingPackets() {
-        this.inner.deref().stop_streaming_packets(this.inner);
+        checkForError(this.lib,this.inner.deref().stop_streaming_packets(this.inner));
     }
 
     public getStreamPacketLength() {
@@ -2304,9 +2238,7 @@ export class DeviceWrapper {
         }
         let buf = Buffer.alloc(count);
         let countptr = ref.alloc(ffi.types.int, count)
-        if (this.inner.deref().get_stream_packets_blocking(this.inner, buf, countptr, timeout) != 0) {
-            throw new Error("failed to get packets");
-        }
+        checkForError(this.lib,this.inner.deref().get_stream_packets_blocking(this.inner, buf, countptr, timeout))
         let resbuff = new Uint8Array(countptr.deref());
         ref.reinterpret(buf, countptr.deref()).copy(resbuff)
         return resbuff
@@ -2314,9 +2246,7 @@ export class DeviceWrapper {
 
     public poll(milliseconds: number): number {
         var completed = ref.alloc(ffi.types.int, 0);
-        if (this.inner.deref().poll_device(this.inner, milliseconds, completed) != 0) {
-            throw new Error("failed to poll device")
-        }
+        checkForError(this.lib,(this.inner.deref().poll_device(this.inner, milliseconds, completed)))
         return completed.deref();
     }
 
@@ -2325,9 +2255,7 @@ export class DeviceWrapper {
             (status: number, connected: number, closure) => {
                 callback(status, connected)
             })
-        if (this.inner.deref().set_connect_callback(this.inner, this.connect_cb, ref.NULL) != 0) {
-            throw new Error("Failed to set connect callback")
-        }
+        checkForError(this.lib,this.inner.deref().set_connect_callback(this.inner, this.connect_cb, ref.NULL))
     }
 
     public waitForConnect(timeout: number) {
@@ -2336,33 +2264,25 @@ export class DeviceWrapper {
 
     public getRemoteDevice(): DeviceWrapper {
         let pointer = ref.alloc(ref.refType(Device));
-        if (this.inner.deref().get_remote_device(this.inner, pointer) != 0) {
-            throw new Error("Failed to get remote device")
-        }
+        checkForError(this.lib,this.inner.deref().get_remote_device(this.inner, pointer))
         return new DeviceWrapper(this.lib, pointer.deref())
     }
 
     public ReconnectDevice(): DeviceWrapper {
         let pointer = ref.alloc(ref.refType(Device));
-        if (this.inner.deref().reconnect_device(this.inner, pointer) != 0) {
-            throw new Error("Failed to get remote device")
-        }
+        checkForError(this.lib,this.inner.deref().reconnect_device(this.inner, pointer))
         return new DeviceWrapper(this.lib, pointer.deref())
     }
 
     public ReconnectDeviceBootloader(): DeviceWrapper {
         let pointer = ref.alloc(ref.refType(Device));
-        if (this.inner.deref().reconnect_device_bootloader(this.inner, pointer) != 0) {
-            throw new Error("Failed to get remote device")
-        }
+        checkForError(this.lib,this.inner.deref().reconnect_device_bootloader(this.inner, pointer))
         return new DeviceWrapper(this.lib, pointer.deref())
     }
 
     public ReconnectDeviceApplication(): DeviceWrapper {
         let pointer = ref.alloc(ref.refType(Device));
-        if (this.inner.deref().reconnect_device_application(this.inner, pointer) != 0) {
-            throw new Error("Failed to get remote device")
-        }
+        checkForError(this.lib,this.inner.deref().reconnect_device_application(this.inner, pointer))
         return new DeviceWrapper(this.lib, pointer.deref())
     }
 
@@ -2397,20 +2317,20 @@ export class DeviceWrapper {
 
     public async getProtocalVersion() {
         let ptr = ref.alloc(ffi.types.uint16);
-        this.lib.asphodel_get_protocol_version_blocking(this.inner.deref(), ptr);
+        checkForError(this.lib,this.lib.asphodel_get_protocol_version_blocking(this.inner.deref(), ptr));
         return ptr.deref();
     }
 
     public async getProtocalVersionString() {
         let buffer = Buffer.alloc(64);
-        this.lib.asphodel_get_protocol_version_string_blocking(this.inner, buffer, buffer.length);
+        checkForError(this.lib,this.lib.asphodel_get_protocol_version_string_blocking(this.inner, buffer, buffer.length));
         return buffer.toString("utf-8");
     }
 
     public async getBoardInfo() {
         let revptr = ref.alloc("uint8");
         let buffer = Buffer.alloc(64);
-        this.lib.asphodel_get_board_info_blocking(this.inner, revptr, buffer, buffer.length);
+        checkForError(this.lib,this.lib.asphodel_get_board_info_blocking(this.inner, revptr, buffer, buffer.length));
         return {
             revision: revptr.deref(),
             board_name: buffer.toString("utf-8")
@@ -2419,7 +2339,7 @@ export class DeviceWrapper {
 
     public async getUserTagLocations() {
         let buffer = Buffer.alloc(6 * ffi.types.size_t.size);
-        this.lib.asphodel_get_user_tag_locations_blocking(this.inner, buffer);
+        checkForError(this.lib,this.lib.asphodel_get_user_tag_locations_blocking(this.inner, buffer));
         let ubuf64: any = new BigUint64Array(6)
         let arch64 = ["arm64", "loong64", "ppc64", "riscv64", "x64"];
         let a32 = false;
@@ -2450,78 +2370,78 @@ export class DeviceWrapper {
 
     public async getBuildInfo() {
         let buf = Buffer.alloc(128);
-        this.lib.asphodel_get_build_info_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_build_info_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getBuildDate() {
         let buf = Buffer.alloc(64);
-        this.lib.asphodel_get_build_date_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_build_date_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getCommit() {
         let buf = Buffer.alloc(64);
-        this.lib.asphodel_get_commit_id_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_commit_id_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getRepoBranch() {
         let buf = Buffer.alloc(64);
-        this.lib.asphodel_get_repo_branch_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_repo_branch_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getRepoName() {
         let buf = Buffer.alloc(64);
-        this.lib.asphodel_get_repo_name_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_repo_name_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getChipFamily() {
         let buf = Buffer.alloc(64);
-        this.lib.asphodel_get_chip_family_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_chip_family_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getChipModel() {
         let buf = Buffer.alloc(64);
-        this.lib.asphodel_get_chip_model_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_chip_model_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getChipID() {
         let buf = Buffer.alloc(64);
-        this.lib.asphodel_get_chip_id_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_chip_id_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getNVMSize() {
         let ptr = ref.alloc(ffi.types.size_t);
-        this.lib.asphodel_get_nvm_size_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_nvm_size_blocking(this.inner, ptr));
         return ptr.deref()
     }
 
     public async eraseNVM() {
-        this.lib.asphodel_erase_nvm_blocking(this.inner)
+        checkForError(this.lib,this.lib.asphodel_erase_nvm_blocking(this.inner))
     }
 
     public async writeNVMRaw(buff: Uint8Array, start_address: number) {
         let b = Buffer.from(buff);
-        this.lib.asphodel_write_nvm_raw_blocking(this.inner, start_address, b, b.length)
+        checkForError(this.lib,this.lib.asphodel_write_nvm_raw_blocking(this.inner, start_address, b, b.length))
     }
 
 
     public async writeNVMSection(buff: Uint8Array, start_address: number) {
         let b = Buffer.from(buff);
-        this.lib.asphodel_write_nvm_section_blocking(this.inner, start_address, b, b.length)
+        checkForError(this.lib,this.lib.asphodel_write_nvm_section_blocking(this.inner, start_address, b, b.length))
     }
 
 
     public async readNVmRaw(start_address: number, len: number) {
         let b = Buffer.alloc(len);
         let lenptr = ref.alloc(ref.types.size_t, len);
-        this.lib.asphodel_read_nvm_raw_blocking(this.inner, start_address, b, lenptr)
+        checkForError(this.lib,this.lib.asphodel_read_nvm_raw_blocking(this.inner, start_address, b, lenptr))
         let ubuf = new Uint8Array(lenptr.deref() as number)
         b.copy(ubuf);
         return ubuf;
@@ -2529,7 +2449,7 @@ export class DeviceWrapper {
 
     public async readNVMSection(start_address: number, len: number) {
         let b = Buffer.alloc(len);
-        this.lib.asphodel_read_nvm_section_blocking(this.inner, start_address, b, len)
+        checkForError(this.lib,this.lib.asphodel_read_nvm_section_blocking(this.inner, start_address, b, len))
         let ubuf = new Uint8Array(len)
         b.copy(ubuf);
         return ubuf;
@@ -2537,18 +2457,18 @@ export class DeviceWrapper {
 
     public async readUserTagString(offset: number, length: number) {
         let buf = Buffer.alloc(length + 5);
-        this.lib.asphodel_read_user_tag_string_blocking(this.inner, offset, length, buf);
+        checkForError(this.lib,this.lib.asphodel_read_user_tag_string_blocking(this.inner, offset, length, buf));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async writeUserTagString(buffer: string, offset: number, size: number) {
         let b = Buffer.from(buffer);
-        this.lib.asphodel_write_user_tag_string_blocking(this.inner, offset, size, b)
+        checkForError(this.lib,this.lib.asphodel_write_user_tag_string_blocking(this.inner, offset, size, b))
     }
 
     public async getNVMModified() {
         let ptr = ref.alloc("uint8")
-        this.lib.asphodel_get_nvm_modified_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_nvm_modified_blocking(this.inner, ptr));
         return ptr.deref();
     }
 
@@ -2556,55 +2476,53 @@ export class DeviceWrapper {
 
     public async getNVMHash() {
         let buf = Buffer.alloc(128);
-        this.lib.asphodel_get_nvm_hash_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_nvm_hash_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getSettingHash() {
         let buf = Buffer.alloc(128);
-        this.lib.asphodel_get_nvm_hash_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_nvm_hash_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async flush() {
-        this.lib.asphodel_flush_blocking(this.inner);
+        checkForError(this.lib,this.lib.asphodel_flush_blocking(this.inner));
     }
 
     public async reset() {
-        this.lib.asphodel_reset_blocking(this.inner);
+        checkForError(this.lib,this.lib.asphodel_reset_blocking(this.inner));
     }
 
     public async getBootloaderInfo() {
         let buf = Buffer.alloc(128);
-        this.lib.asphodel_get_bootloader_info_blocking(this.inner, buf, buf.length);
+        checkForError(this.lib,this.lib.asphodel_get_bootloader_info_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async bootloaderJump() {
-        let buf = Buffer.alloc(128);
-        this.lib.asphodel_bootloader_jump_blocking(this.inner);
+        checkForError(this.lib,this.lib.asphodel_bootloader_jump_blocking(this.inner));
     }
 
     public async getResetFlag() {
         let ptr = ref.alloc("uint8")
-        this.lib.asphodel_get_reset_flag_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_reset_flag_blocking(this.inner, ptr));
         return ptr.deref();
     }
 
     public async clearResetFlag() {
-        let buf = Buffer.alloc(128);
-        this.lib.asphodel_clear_reset_flag_blocking(this.inner);
+        checkForError(this.lib,this.lib.asphodel_clear_reset_flag_blocking(this.inner));
     }
 
     public async getRGBCount() {
         let ptr = ref.alloc("int")
-        this.lib.asphodel_get_rgb_count_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_rgb_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
 
     public async getRGBValues(index: number) {
         let buf = Buffer.alloc(3);
-        this.lib.asphodel_get_rgb_values_blocking(this.inner, index, buf);
+        checkForError(this.lib,this.lib.asphodel_get_rgb_values_blocking(this.inner, index, buf));
         return {
             r: buf.at(0), g: buf.at(1), b: buf.at(2)
         }
@@ -2615,56 +2533,56 @@ export class DeviceWrapper {
         buf[0] = values.r;
         buf[1] = values.g;
         buf[2] = values.b;
-        this.lib.asphodel_set_rgb_values_blocking(this.inner, index, buf, instant ? 1 : 0);
+        checkForError(this.lib,this.lib.asphodel_set_rgb_values_blocking(this.inner, index, buf, instant ? 1 : 0));
     }
 
     public async setRGBValuesHex(index: number, values: number, instant: boolean) {
-        this.lib.asphodel_set_rgb_values_hex_blocking(this.inner, index, values, instant ? 1 : 0);
+        checkForError(this.lib,this.lib.asphodel_set_rgb_values_hex_blocking(this.inner, index, values, instant ? 1 : 0));
     }
 
     public async getLEDCount() {
         let ptr = ref.alloc("int")
-        this.lib.asphodel_get_led_count_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_led_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
 
     public async getLEDValue(index: number) {
         let ptr = ref.alloc("uint8");
-        this.lib.asphodel_get_led_value_blocking(this.inner, index, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_led_value_blocking(this.inner, index, ptr));
         return ptr.deref()
     }
 
     public async setLEDValue(index: number, value: number, instant: boolean) {
-        this.lib.asphodel_set_led_value_blocking(this.inner, index, value, instant ? 1 : 0);
+        checkForError(this.lib,this.lib.asphodel_set_led_value_blocking(this.inner, index, value, instant ? 1 : 0));
     }
 
     public async setMode(mode: number) {
-        this.lib.asphodel_set_device_mode_blocking(this.inner, mode);
+        checkForError(this.lib,this.lib.asphodel_set_device_mode_blocking(this.inner, mode));
     }
 
     public async getDeviceMode(index: number) {
         let ptr = ref.alloc("uint8");
-        this.lib.asphodel_get_device_mode_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_device_mode_blocking(this.inner, ptr));
         return ptr.deref()
     }
 
     public async getSettingCount() {
         let ptr = ref.alloc("int");
-        this.lib.asphodel_get_setting_count_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_setting_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
 
     public async getSettingName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("int", buf.length);
-        this.lib.asphodel_get_setting_name_blocking(this.inner, index, buf, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_setting_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getSettingDefault(index: number) {
         let buf = Buffer.alloc(256);
         let ptr = ref.alloc("int", buf.length);
-        this.lib.asphodel_get_setting_default_blocking(this.inner, index, buf, ptr)
+        checkForError(this.lib,this.lib.asphodel_get_setting_default_blocking(this.inner, index, buf, ptr))
         let ubuf = new Uint8Array(ptr.deref());
         buf.copy(ubuf, 0, 0, ptr.deref())
         return ubuf
@@ -2673,7 +2591,7 @@ export class DeviceWrapper {
     public async getCustomEnumCounts() {
         let buf = Buffer.alloc(256);
         let ptr = ref.alloc("int", buf.length);
-        this.lib.asphodel_get_custom_enum_counts_blocking(this.inner, buf, ptr)
+        checkForError(this.lib,this.lib.asphodel_get_custom_enum_counts_blocking(this.inner, buf, ptr))
         let ubuf = new Uint8Array(ptr.deref());
         buf.copy(ubuf, 0, 0, ptr.deref())
         return ubuf
@@ -2683,27 +2601,27 @@ export class DeviceWrapper {
     public async getCustomEnumValueName(index: number, value: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("int", buf.length);
-        this.lib.asphodel_get_custom_enum_value_name_blocking(this.inner, index, value, buf, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_custom_enum_value_name_blocking(this.inner, index, value, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getSettingCategoryCount() {
         let ptr = ref.alloc("int");
-        this.lib.asphodel_get_setting_category_count_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_setting_category_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
 
     public async getSettingCategoryName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("int", buf.length);
-        this.lib.asphodel_get_setting_category_name_blocking(this.inner, index, buf, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_setting_category_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getSettingCategorySetting(index: number) {
         let buf = Buffer.alloc(256);
         let ptr = ref.alloc("int", buf.length);
-        this.lib.asphodel_get_setting_category_settings_blocking(this.inner, index, buf, ptr)
+        checkForError(this.lib,this.lib.asphodel_get_setting_category_settings_blocking(this.inner, index, buf, ptr))
         let ubuf = new Uint8Array(ptr.deref());
         buf.copy(ubuf, 0, 0, ptr.deref())
         return ubuf;
@@ -2711,58 +2629,58 @@ export class DeviceWrapper {
 
     public async getSettingInfo(index: number) {
         let ptr = ref.alloc(SettingInfo);
-        this.lib.asphodel_get_setting_info_blocking(this.inner, index, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_setting_info_blocking(this.inner, index, ptr));
         return new SettingInfoWrapper(this.lib, ptr)
     }
 
     public async getGPIOPortCount() {
         let ptr = ref.alloc("int");
-        this.lib.asphodel_get_gpio_port_count_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_gpio_port_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
 
     public async getSettingPortName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
-        this.lib.asphodel_get_gpio_port_name_blocking(this.inner, index, buf, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_gpio_port_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getGPIOPortInfo(index: number) {
         let ptr = ref.alloc(GPIOPortInfo);
-        this.lib.asphodel_get_gpio_port_info_blocking(this.inner, index, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_gpio_port_info_blocking(this.inner, index, ptr));
         return new GPIOPortinfoWrapper(this.lib, ptr)
     }
 
     public async getGPIOPortValues(index: number) {
         let ptr = ref.alloc("uint32");
-        this.lib.asphodel_get_gpio_port_values_blocking(this.inner, index, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_gpio_port_values_blocking(this.inner, index, ptr));
         return ptr.deref()
     }
 
     public async setGPIOPortMode(index: number, mode: number, pins: number) {
-        this.lib.asphodel_set_gpio_port_modes_blocking(this.inner, index, mode, pins);
+        checkForError(this.lib,this.lib.asphodel_set_gpio_port_modes_blocking(this.inner, index, mode, pins));
     }
 
     public async disableGPIOOverrides() {
-        this.lib.asphodel_disable_gpio_overrides_blocking(this.inner);
+        checkForError(this.lib,this.lib.asphodel_disable_gpio_overrides_blocking(this.inner));
     }
 
     public async getBusCounts() {
         let spi = ref.alloc("int");
         let i2c = ref.alloc("int");
-        this.lib.asphodel_get_bus_counts_blocking(this.inner, spi, i2c)
+        checkForError(this.lib,this.lib.asphodel_get_bus_counts_blocking(this.inner, spi, i2c))
         return { spi: spi.deref(), i2c: i2c.deref() }
     }
 
     public async setSpiCsMode(index: number, cs_mode: number) {
-        this.lib.asphodel_set_spi_cs_mode_blocking(this.inner, index, cs_mode)
+        checkForError(this.lib,this.lib.asphodel_set_spi_cs_mode_blocking(this.inner, index, cs_mode))
     }
 
     public async doSpiTransfer(index: number, tx_data: Uint8Array, data_length: number) {
         let txbuf = Buffer.from(tx_data);
         let rxbuf = Buffer.alloc(data_length);
-        this.lib.asphodel_do_spi_transfer_blocking(this.inner, index, txbuf, rxbuf, data_length)
+        checkForError(this.lib,this.lib.asphodel_do_spi_transfer_blocking(this.inner, index, txbuf, rxbuf, data_length))
         let ubuf = new Uint8Array(data_length);
         rxbuf.copy(ubuf);
         return ubuf
@@ -2770,55 +2688,55 @@ export class DeviceWrapper {
 
     public async doI2cWrite(index: number, addr: number, tx_data: Uint8Array) {
         let txbuf = Buffer.from(tx_data);
-        this.lib.asphodel_do_i2c_write_blocking(this.inner, index, addr, txbuf, txbuf.length)
+        checkForError(this.lib,this.lib.asphodel_do_i2c_write_blocking(this.inner, index, addr, txbuf, txbuf.length))
     }
 
     public async doI2cRead(index: number, addr: number, read_length: number) {
         let txbuf = Buffer.alloc(read_length);
-        this.lib.asphodel_do_i2c_read_blocking(this.inner, index, addr, txbuf, txbuf.length)
+        checkForError(this.lib,this.lib.asphodel_do_i2c_read_blocking(this.inner, index, addr, txbuf, txbuf.length))
     }
 
     public async doI2cWriteRead(index: number, addr: number, txdata: Uint8Array, read_length: number) {
         let rxbuf = Buffer.alloc(read_length);
         let txbuf = Buffer.from(txdata)
-        this.lib.asphodel_do_i2c_write_read_blocking(this.inner, index, addr, txbuf, txbuf.length, rxbuf, read_length)
+        checkForError(this.lib,this.lib.asphodel_do_i2c_write_read_blocking(this.inner, index, addr, txbuf, txbuf.length, rxbuf, read_length))
         let ubuf = new Uint8Array(read_length)
         rxbuf.copy(ubuf)
         return ubuf
     }
 
     public async doRadioFixedTest(channel: number, duration: number, mode: number) {
-        this.lib.asphodel_do_radio_fixed_test_blocking(this.inner, channel, duration, mode)
+        checkForError(this.lib,this.lib.asphodel_do_radio_fixed_test_blocking(this.inner, channel, duration, mode))
     }
 
     public async doRadioSweepTest(start_channel: number, stop_channel: number, hop_interval: number, hop_count: number, mode: number) {
-        this.lib.asphodel_do_radio_sweep_test_blocking(this.inner, start_channel, stop_channel, hop_interval, hop_count, mode)
+        checkForError(this.lib,this.lib.asphodel_do_radio_sweep_test_blocking(this.inner, start_channel, stop_channel, hop_interval, hop_count, mode))
     }
 
     public async getInfoRegionCount() {
         let ptr = ref.alloc("int");
-        this.lib.asphodel_get_info_region_count_blocking(this.inner, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_info_region_count_blocking(this.inner, ptr));
         return ptr.deref()
     }
 
     public async getInfoRegionName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
-        this.lib.asphodel_get_info_region_name_blocking(this.inner, index, buf, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_info_region_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getInfoRegion(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
-        this.lib.asphodel_get_info_region_blocking(this.inner, index, buf, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_info_region_blocking(this.inner, index, buf, ptr));
         let ubuf = new Uint8Array(ptr.deref())
         return buf.copy(ubuf, 0, 0, ptr.deref())
     }
 
     public async getStackInfo() {
         let buf = Buffer.alloc(2 * 4);
-        this.lib.asphodel_get_stack_info_blocking(this.inner, buf);
+        checkForError(this.lib,this.lib.asphodel_get_stack_info_blocking(this.inner, buf));
         return { free: buf.readInt32LE(0), used: buf.readInt32LE(4) }
     }
 
@@ -2826,7 +2744,7 @@ export class DeviceWrapper {
         let rxbuf = Buffer.alloc(data.length);
         let txbuf = Buffer.from(data)
         let lptr = ref.alloc(ffi.types.size_t, data.length)
-        this.lib.asphodel_echo_raw_blocking(this.inner, txbuf, txbuf.length, rxbuf, lptr)
+        checkForError(this.lib,this.lib.asphodel_echo_raw_blocking(this.inner, txbuf, txbuf.length, rxbuf, lptr))
         let ubuf = new Uint8Array(lptr.deref() as number)
         rxbuf.copy(ubuf)
         return ubuf
@@ -2836,7 +2754,7 @@ export class DeviceWrapper {
         let rxbuf = Buffer.alloc(data.length);
         let txbuf = Buffer.from(data)
         let lptr = ref.alloc(ffi.types.size_t, data.length)
-        this.lib.asphodel_echo_transaction_blocking(this.inner, txbuf, txbuf.length, rxbuf, lptr)
+        checkForError(this.lib,this.lib.asphodel_echo_transaction_blocking(this.inner, txbuf, txbuf.length, rxbuf, lptr))
         let ubuf = new Uint8Array(lptr.deref() as number)
         rxbuf.copy(ubuf)
         return ubuf
@@ -2846,7 +2764,7 @@ export class DeviceWrapper {
         let rxbuf = Buffer.alloc(data.length);
         let txbuf = Buffer.from(data)
         let lptr = ref.alloc(ffi.types.size_t, data.length)
-        this.lib.asphodel_echo_params_blocking(this.inner, txbuf, txbuf.length, rxbuf, lptr)
+        checkForError(this.lib,this.lib.asphodel_echo_params_blocking(this.inner, txbuf, txbuf.length, rxbuf, lptr))
         let ubuf = new Uint8Array(lptr.deref() as number)
         rxbuf.copy(ubuf)
         return ubuf
@@ -2856,7 +2774,7 @@ export class DeviceWrapper {
         let fil = ref.alloc("uint8", 0)
         let id = ref.alloc("uint8", 0)
         let co = ref.alloc("int", 0)
-        this.lib.asphodel_get_stream_count_blocking(this.inner, co, fil, id);
+        checkForError(this.lib,this.lib.asphodel_get_stream_count_blocking(this.inner, co, fil, id));
         return {
             count: co.deref(),
             id_bits: id.deref(),
@@ -2866,14 +2784,14 @@ export class DeviceWrapper {
 
     public async getStream(index: number) {
         let st = ref.alloc(ref.refType(StreamInfo));
-        this.lib.asphodel_get_stream_blocking(this.inner, index, st)
+        checkForError(this.lib,this.lib.asphodel_get_stream_blocking(this.inner, index, st))
         return new StreamInfoWrapper(this.lib, st.deref())
     }
 
     public async getStreamChannels(index: number, len: number) {
         let arr = Buffer.alloc(len)
         let lenptr = ref.alloc("uint8", len)
-        this.lib.asphodel_get_stream_channels_blocking(this.inner, index, arr, lenptr);
+        checkForError(this.lib,this.lib.asphodel_get_stream_channels_blocking(this.inner, index, arr, lenptr));
         let iarr = new Uint8Array(len);
         arr.copy(iarr);
         return {
@@ -2884,22 +2802,22 @@ export class DeviceWrapper {
 
     public async getStreamFormat(index: number) {
         let st = ref.alloc(StreamInfo);
-        this.lib.asphodel_get_stream_format_blocking(this.inner, index, st)
+        checkForError(this.lib,this.lib.asphodel_get_stream_format_blocking(this.inner, index, st))
         return new StreamInfoWrapper(this.lib, st)
     }
 
     public async enableStream(index: number, enable: boolean) {
-        this.lib.asphodel_enable_stream_blocking(this.inner, index, enable ? 1 : 0)
+        checkForError(this.lib,this.lib.asphodel_enable_stream_blocking(this.inner, index, enable ? 1 : 0))
     }
 
     public async warmUpStream(index: number, enable: boolean) {
-        this.lib.asphodel_warm_up_stream_blocking(this.inner, index, enable ? 1 : 0)
+        checkForError(this.lib,this.lib.asphodel_warm_up_stream_blocking(this.inner, index, enable ? 1 : 0))
     }
 
     public async getStreamStatus(index: number) {
         let en = ref.alloc("int");
         let wa = ref.alloc("int");
-        this.lib.asphodel_get_stream_status_blocking(this.inner, index, en, wa);
+        checkForError(this.lib,this.lib.asphodel_get_stream_status_blocking(this.inner, index, en, wa));
         return {
             enable: en.deref(),
             warm_up: wa.deref()
@@ -2913,7 +2831,7 @@ export class DeviceWrapper {
         let sca = ref.alloc("int", 0)
         let off = ref.alloc("int", 0)
 
-        this.lib.asphodel_get_stream_rate_info_blocking(this.inner, index, avail, ci, inv, sca, off);
+        checkForError(this.lib,this.lib.asphodel_get_stream_rate_info_blocking(this.inner, index, avail, ci, inv, sca, off));
 
         return {
             available: avail.deref(),
@@ -2926,33 +2844,33 @@ export class DeviceWrapper {
 
     public async getChannelCount() {
         let count = ref.alloc("int")
-        this.lib.asphodel_get_channel_count_blocking(this.inner, count);
+        checkForError(this.lib,this.lib.asphodel_get_channel_count_blocking(this.inner, count));
         return count.deref()
     }
 
     public async getChannel(index: number) {
         let st = ref.alloc(ref.refType(ChannelInfo));
-        this.lib.asphodel_get_channel_blocking(this.inner, index, st)
+        checkForError(this.lib,this.lib.asphodel_get_channel_blocking(this.inner, index, st))
         return new ChannelInfoWrapper(this.lib, st.deref())
     }
 
     public async getChannelName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
-        this.lib.asphodel_get_channel_name_blocking(this.inner, index, buf, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_channel_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getChannelInfo(index: number) {
         let st = ref.alloc(ChannelInfo);
-        this.lib.asphodel_get_channel_info_blocking(this.inner, index, st)
+        checkForError(this.lib,this.lib.asphodel_get_channel_info_blocking(this.inner, index, st))
         return new ChannelInfoWrapper(this.lib, st)
     }
 
     public async getChannelCoefficients(index: number, length: number) {
         let fbuf = Buffer.alloc(ffi.types.float.size * length);
         let lptr = ref.alloc("uint8", length)
-        this.lib.asphodel_get_channel_coefficients_blocking(this.inner, index, fbuf, lptr)
+        checkForError(this.lib,this.lib.asphodel_get_channel_coefficients_blocking(this.inner, index, fbuf, lptr))
         let floats = new Float32Array(length)
         for (let i = 0; i < length; i++) {
             floats[i] = os.endianness() == "LE" ? fbuf.readFloatLE(i * ffi.types.float.size) : fbuf.readFloatBE(i * ffi.types.float.size)
@@ -2966,7 +2884,7 @@ export class DeviceWrapper {
     async getChannelChunk(index: number, chunk_number: number, length: number) {
         let chbuff = Buffer.alloc(length);
         let lptr = ref.alloc("uint8", length);
-        this.lib.asphodel_get_channel_chunk_blocking(this.inner, index, chunk_number, chbuff, lptr);
+        checkForError(this.lib,this.lib.asphodel_get_channel_chunk_blocking(this.inner, index, chunk_number, chbuff, lptr));
         let ubuf = new Uint8Array(length);
         chbuff.copy(ubuf);
         return {
@@ -2979,7 +2897,7 @@ export class DeviceWrapper {
         let rbuf = Buffer.alloc(reply_len);
         let rlen = ref.alloc("uint8", reply_len);
         let dbuf = Buffer.from(data);
-        this.lib.asphodel_channel_specific_blocking(this.inner, index, dbuf, dbuf.length, rbuf, rlen);
+        checkForError(this.lib,this.lib.asphodel_channel_specific_blocking(this.inner, index, dbuf, dbuf.length, rbuf, rlen));
         let rar = new Uint8Array(reply_len);
         rbuf.copy(rar)
         return {
@@ -2991,7 +2909,7 @@ export class DeviceWrapper {
     public getChannelCalibration(index: number) {
         let avail = ref.alloc("int")
         let ptr = ref.alloc(ChannelCallibration);
-        this.lib.asphodel_get_channel_calibration_blocking(this.inner, index, avail, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_channel_calibration_blocking(this.inner, index, avail, ptr));
         return {
             available: avail.deref(),
             callibration: new ChannelCallibrationWrapper(this.lib, ptr)
@@ -3000,27 +2918,27 @@ export class DeviceWrapper {
 
     public async getSupplyCount() {
         let cnt = ref.alloc("int", 0)
-        this.lib.asphodel_get_supply_count_blocking(this.inner, cnt);
+        checkForError(this.lib,this.lib.asphodel_get_supply_count_blocking(this.inner, cnt));
         return cnt.deref();
     }
 
     public async getSupplyName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
-        this.lib.asphodel_get_supply_name_blocking(this.inner, index, buf, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_supply_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getSupplyInfo(index: number) {
         let ptr = ref.alloc(SupplyInfo);
-        this.lib.asphodel_get_supply_info_blocking(this.inner, index, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_supply_info_blocking(this.inner, index, ptr));
         return new ChannelCallibrationWrapper(this.lib, ptr)
     }
 
     public async checkSupply(index: number, tries: number) {
         let m = ref.alloc("uint32", 0);
         let r = ref.alloc("uint8", 0)
-        this.lib.asphodel_check_supply_blocking(this.inner, index, m, r, tries);
+        checkForError(this.lib,this.lib.asphodel_check_supply_blocking(this.inner, index, m, r, tries));
         return {
             measurement: m.deref(),
             result: r.deref()
@@ -3033,19 +2951,19 @@ export class DeviceWrapper {
     }
 
     public async enableRfPower(enable: boolean) {
-        this.lib.asphodel_enable_rf_power_blocking(this.inner, enable ? 1 : 0)
+        checkForError(this.lib,this.lib.asphodel_enable_rf_power_blocking(this.inner, enable ? 1 : 0))
     }
 
     public async getRfpowerStatus() {
         let st = ref.alloc("int", 0);
-        this.lib.asphodel_get_rf_power_status_blocking(this.inner, st);
+        checkForError(this.lib,this.lib.asphodel_get_rf_power_status_blocking(this.inner, st));
         return st.deref()
     }
 
     public async getRfPowerCtlVars(len: number) {
         let arr = Buffer.alloc(len)
         let lenptr = ref.alloc("uint8", len)
-        this.lib.asphodel_get_rf_power_ctrl_vars_blocking(this.inner, arr, lenptr);
+        checkForError(this.lib,this.lib.asphodel_get_rf_power_ctrl_vars_blocking(this.inner, arr, lenptr));
         let iarr = new Uint8Array(len);
         arr.copy(iarr);
         return {
@@ -3055,17 +2973,17 @@ export class DeviceWrapper {
     }
 
     public async resetRfPowerTimeout(timeout: number) {
-        this.lib.asphodel_reset_rf_power_timeout_blocking(this.inner, timeout);
+        checkForError(this.lib,this.lib.asphodel_reset_rf_power_timeout_blocking(this.inner, timeout));
     }
 
     public async bootLoaderStartProgram() {
-        this.lib.asphodel_bootloader_start_program_blocking(this.inner)
+        checkForError(this.lib,this.lib.asphodel_bootloader_start_program_blocking(this.inner))
     }
 
     public async getBootLoaderPageInfo(length: number) {
         let buf = Buffer.alloc(length * 4);
         let l = ref.alloc("uint8", length);
-        this.lib.asphodel_get_bootloader_page_info_blocking(this.inner, buf, l);
+        checkForError(this.lib,this.lib.asphodel_get_bootloader_page_info_blocking(this.inner, buf, l));
         let ub = new Uint32Array(l.deref());
         for (let i = 0; i < ub.length; i++) {
             ub[i] = os.endianness() == "LE" ? buf.readUint32LE(i * ffi.types.float.size) : buf.readUint32BE(i * ffi.types.float.size)
@@ -3076,7 +2994,7 @@ export class DeviceWrapper {
     public async getBootLoaderblockSizes(length: number) {
         let buf = Buffer.alloc(length * 2);
         let l = ref.alloc("uint8", length);
-        this.lib.asphodel_get_bootloader_page_info_blocking(this.inner, buf, l);
+        checkForError(this.lib,this.lib.asphodel_get_bootloader_page_info_blocking(this.inner, buf, l));
         let ub = new Uint16Array(l.deref());
         for (let i = 0; i < ub.length; i++) {
             ub[i] = os.endianness() == "LE" ? buf.readUint16LE(i * ffi.types.float.size) : buf.readUint16BE(i * ffi.types.float.size)
@@ -3085,72 +3003,72 @@ export class DeviceWrapper {
     }
 
     public async startBootLoaderPage(page_number: number) {
-        this.lib.asphodel_start_bootloader_page_blocking(this.inner, page_number, ref.NULL, 0);
+        checkForError(this.lib,this.lib.asphodel_start_bootloader_page_blocking(this.inner, page_number, ref.NULL, 0));
     }
 
     public async writeBootLoaderCodeBlock(data: Uint8Array) {
         let db = Buffer.from(data);
-        this.lib.asphodel_write_bootloader_code_block_blocking(this.inner, db, db.length);
+        checkForError(this.lib,this.lib.asphodel_write_bootloader_code_block_blocking(this.inner, db, db.length));
     }
 
     public async finishBootloaderPage() {
-        this.lib.asphodel_finish_bootloader_page_blocking(this.inner, ref.NULL, 0);
+        checkForError(this.lib,this.lib.asphodel_finish_bootloader_page_blocking(this.inner, ref.NULL, 0));
     }
 
     public async verifyBootloaderPage(mac_tag: Uint8Array) {
         let mb = Buffer.from(mac_tag);
-        this.lib.asphodel_verify_bootloader_page_blocking(this.inner, mb, mb.length)
+        checkForError(this.lib,this.lib.asphodel_verify_bootloader_page_blocking(this.inner, mb, mb.length))
     }
 
     public async setStrainOutputs(channel_index: number, bridge_index: number, positive_side: number, negative_side: number) {
-        this.lib.asphodel_set_strain_outputs_blocking(this.inner, channel_index, bridge_index, positive_side, negative_side)
+        checkForError(this.lib,this.lib.asphodel_set_strain_outputs_blocking(this.inner, channel_index, bridge_index, positive_side, negative_side))
     }
 
     public async enableAccelSelfTest(channel_index: number, enable: boolean) {
-        this.lib.asphodel_enable_accel_self_test_blocking(this.inner, channel_index, enable ? 1 : 0)
+        checkForError(this.lib,this.lib.asphodel_enable_accel_self_test_blocking(this.inner, channel_index, enable ? 1 : 0))
     }
 
     public async getCtrlVarCount() {
         let c = ref.alloc("int");
-        this.lib.asphodel_get_ctrl_var_count_blocking(this.inner, c)
+        checkForError(this.lib,this.lib.asphodel_get_ctrl_var_count_blocking(this.inner, c))
         return c.deref()
     }
 
     public async getCtrlVarName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
-        this.lib.asphodel_get_ctrl_var_name_blocking(this.inner, index, buf, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_ctrl_var_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
     public async getCtrlVarInfo(index: number) {
         let ptr = ref.alloc(CtrlVarInfo);
-        this.lib.asphodel_get_ctrl_var_blocking(this.inner, index, ptr);
+        checkForError(this.lib,this.lib.asphodel_get_ctrl_var_blocking(this.inner, index, ptr));
         return new CtrlVarInfoWrapper(this.lib, ptr)
     }
 
     public async getCtrlVar(index: number) {
         let c = ref.alloc("uint32");
-        this.lib.asphodel_get_ctrl_var_blocking(this.inner, index, c)
+        checkForError(this.lib,this.lib.asphodel_get_ctrl_var_blocking(this.inner, index, c))
         return c.deref()
     }
 
     public async setCtrlVar(index: number, value: number) {
-        this.lib.asphodel_set_ctrl_var_blocking(this.inner, index, value)
+        checkForError(this.lib,this.lib.asphodel_set_ctrl_var_blocking(this.inner, index, value))
     }
 
     public async stopRadio() {
-        this.lib.asphodel_stop_radio_blocking(this.inner)
+        checkForError(this.lib,this.lib.asphodel_stop_radio_blocking(this.inner))
     }
 
     public startRadioScan() {
-        this.lib.asphodel_start_radio_scan_blocking(this.inner)
+        checkForError(this.lib,this.lib.asphodel_start_radio_scan_blocking(this.inner))
     }
 
     public async getRawRadioScanResults(length: number) {
         let res = Buffer.alloc(length * 4);
         let lptr = ref.alloc(ffi.types.size_t, length);
-        this.lib.asphodel_get_raw_radio_scan_results_blocking(this.inner, res, lptr)
+        checkForError(this.lib,this.lib.asphodel_get_raw_radio_scan_results_blocking(this.inner, res, lptr))
         let ub = new Uint32Array(lptr.deref() as number);
         for (let i = 0; i < ub.length; i++) {
           ub[i] = os.endianness() == "LE" ? res.readUint32LE(i * 4) : res.readUint32BE(i * 4)
@@ -3161,7 +3079,7 @@ export class DeviceWrapper {
     public async getRadioScanResults(length: number) {
         let res = ref.alloc(ArrayType("uint32"));
         let lptr = ref.alloc(ffi.types.size_t, length);
-        this.lib.asphodel_get_radio_scan_results_blocking(this.inner, res, lptr)
+        checkForError(this.lib,this.lib.asphodel_get_radio_scan_results_blocking(this.inner, res, lptr))
         let ub = new Uint32Array(lptr.deref() as number);
         let resbuff = res.deref().buffer.reinterpret(lptr.deref() as number * 4)
         for (let i = 0; i < ub.length; i++) {
@@ -3174,7 +3092,7 @@ export class DeviceWrapper {
     public async getRawRadioExtraScanResults(length: number) {
         let res = Buffer.alloc(length * 4);
         let lptr = ref.alloc(ffi.types.size_t, length);
-        this.lib.asphodel_get_raw_radio_extra_scan_results_blocking(this.inner, res, lptr)
+        checkForError(this.lib,this.lib.asphodel_get_raw_radio_extra_scan_results_blocking(this.inner, res, lptr))
         let ub = new Uint32Array(lptr.deref() as number);
         for (let i = 0; i < ub.length; i++) {
           ub[i] = os.endianness() == "LE" ? res.readUint32LE(i * 4) : res.readUint32BE(i * 4)
@@ -3185,7 +3103,7 @@ export class DeviceWrapper {
     public async getRadioExtraScanResults(length: number) {
         let res = ref.alloc(ArrayType("uint32"));
         let lptr = ref.alloc(ffi.types.size_t, length);
-        this.lib.asphodel_get_radio_scan_results_blocking(this.inner, res, lptr)
+        checkForError(this.lib,this.lib.asphodel_get_radio_scan_results_blocking(this.inner, res, lptr))
         let ub = new Uint32Array(lptr.deref() as number);
         let resbuff = res.deref().buffer.reinterpret(lptr.deref() as number * 4)
         for (let i = 0; i < ub.length; i++) {
@@ -3201,14 +3119,14 @@ export class DeviceWrapper {
             os.endianness() == "BE"? sb.writeInt32BE(s, i * 4) : sb.writeInt32LE(s, i * 4)
         })
         let res = Buffer.alloc(serials.length);
-        this.lib.asphodel_get_radio_scan_power_blocking(this.inner, sb, res, serials.length)
+        checkForError(this.lib,this.lib.asphodel_get_radio_scan_power_blocking(this.inner, sb, res, serials.length))
         let ub = new Uint8Array(serials.length);
         res.copy(ub);
         return ub
     }
 
     public async connectRadio(serial_number: number) {
-        this.lib.asphodel_connect_radio_blocking(this.inner, serial_number)
+        checkForError(this.lib,this.lib.asphodel_connect_radio_blocking(this.inner, serial_number))
     }
 
     public async getRadioStatus() {
@@ -3216,7 +3134,7 @@ export class DeviceWrapper {
         let ser = ref.alloc("uint32");
         let pr = ref.alloc("uint8")
         let scan = ref.alloc("int");
-        this.lib.asphodel_get_radio_status_blocking(this.inner, con, ser, pr, scan);
+        checkForError(this.lib,this.lib.asphodel_get_radio_status_blocking(this.inner, con, ser, pr, scan));
         return {
             connected: con.deref(),
             serial_number: ser.deref(),
@@ -3228,7 +3146,7 @@ export class DeviceWrapper {
     public async getRadioCtlVars(len: number) {
         let arr = Buffer.alloc(len)
         let lenptr = ref.alloc("uint8", len)
-        this.lib.asphodel_get_radio_ctrl_vars_blocking(this.inner, arr, lenptr);
+        checkForError(this.lib,this.lib.asphodel_get_radio_ctrl_vars_blocking(this.inner, arr, lenptr));
         let iarr = new Uint8Array(len);
         arr.copy(iarr);
         return arr
@@ -3236,32 +3154,32 @@ export class DeviceWrapper {
 
     public async getRadioDefaultSerial() {
         let ser = ref.alloc("uint32");
-        this.lib.asphodel_get_radio_default_serial_blocking(this.inner, ser);
+        checkForError(this.lib,this.lib.asphodel_get_radio_default_serial_blocking(this.inner, ser));
         return ser.deref();
     }
 
     public startRadioScanBoot() {
-        this.lib.asphodel_start_radio_scan_boot_blocking(this.inner)
+        checkForError(this.lib,this.lib.asphodel_start_radio_scan_boot_blocking(this.inner))
     }
 
     public startConnectRadioBoot(serial_number: number) {
-        this.lib.asphodel_connect_radio_boot_blocking(this.inner, serial_number)
+        checkForError(this.lib,this.lib.asphodel_connect_radio_boot_blocking(this.inner, serial_number))
     }
 
     public stopRemote() {
-        this.lib.asphodel_stop_remote(this.inner)
+        checkForError(this.lib,this.lib.asphodel_stop_remote(this.inner))
     }
 
 
     public restartRemote() {
-        this.lib.asphodel_restart_remote_blocking(this.inner)
+        checkForError(this.lib,this.lib.asphodel_restart_remote_blocking(this.inner))
     }
 
     public async getRemoteStatus() {
         let con = ref.alloc("int");
         let ser = ref.alloc("uint32");
         let pr = ref.alloc("uint8")
-        this.lib.asphodel_get_remote_status_blocking(this.inner, con, ser, pr);
+        checkForError(this.lib,this.lib.asphodel_get_remote_status_blocking(this.inner, con, ser, pr));
         return {
             connected: con.deref(),
             serial_number: ser.deref(),
@@ -3270,11 +3188,11 @@ export class DeviceWrapper {
     }
 
     public restartRemoteApp() {
-        this.lib.asphodel_restart_remote_app_blocking(this.inner)
+        checkForError(this.lib,this.lib.asphodel_restart_remote_app_blocking(this.inner))
     }
 
     public restartRemoteBoot() {
-        this.lib.asphodel_restart_remote_boot_blocking(this.inner)
+        checkForError(this.lib,this.lib.asphodel_restart_remote_boot_blocking(this.inner))
     }
 
     public supportsRfPowerCommands() {
@@ -3295,48 +3213,48 @@ export class DeviceWrapper {
 
 }
 
-const example = ffi.Library("./example.so", {
-    //'hello_world': ["void", ["string"]],  // Function with no arguments and void return type
-    //'add_numbers': ['int', ['int', 'int']]  // Function that takes two ints and returns an int
-    'getDevice': [ref.refType(Device), []],
-    "asphodel_get_user_tag_locations_blocking": ["int", [DevicePtr, "void*"]],
-    "asphodel_get_build_info_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
-    "asphodel_read_nvm_section_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t]],
-    "asphodel_usb_find_devices": ["int", ["void*", ref.refType(ffi.types.size_t)]],
-    "asphodel_tcp_create_device": ["int", ["uint8*", "uint16", "int", "uint8*", ref.refType(DevicePtr)]],
-    //"getSettingInfo": [ref.refType(SettingInfo), []],
-    "getChanInfo": [ref.refType(ChannelInfo), []],
-    "recvCI": ["void", [ArrayType(ChannelInfo)]],
-
-    "getDec": [ref.refType(ChannelDecoder), []],
-    "getSD": [ref.refType(StreamDecoder), []],
-    "getDD": [ref.refType(DeviceDecoder), []],
-
-
-    "getSI": [ref.refType(StreamInfo), []],
-
-    "triggerCb": ["void", [ref.refType(ChannelDecoder)]],
-    "asphodel_create_channel_decoder": ["int", [ChannelInfoPtr, "uint16", ref.refType(ChannelDecoderPtr)]],
-
-
-    "asphodel_check_accel_self_test": ["int", [ChannelInfoPtr, "double*", "double*", "int*"]],
-    "asphodel_get_raw_radio_scan_results_blocking": ["int", ["void*", ArrayType("uint32"), ref.refType(ffi.types.size_t)]],
-    "asphodel_get_radio_scan_results_blocking": ["int", [DevicePtr, "uint32*", ref.refType(ffi.types.size_t)]],
-
-    "asphodel_free_radio_scan_results": ["int", ["uint32*"]],
-    "asphodel_get_radio_scan_power_blocking": ["int", [DevicePtr, "uint32*", "uint8*", ffi.types.size_t]],
-
-
-});
-
-let d = example.getDevice();
-
-
-let dev = new DeviceWrapper(example, d);
-
-
-
-console.log(dev.getRadioScanPower(new Uint32Array([1,2,3,4,5])))
+//const example = ffi.Library("./example.so", {
+//    //'hello_world': ["void", ["string"]],  // Function with no arguments and void return type
+//    //'add_numbers': ['int', ['int', 'int']]  // Function that takes two ints and returns an int
+//    'getDevice': [ref.refType(Device), []],
+//    "asphodel_get_user_tag_locations_blocking": ["int", [DevicePtr, "void*"]],
+//    "asphodel_get_build_info_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    "asphodel_read_nvm_section_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t]],
+//    "asphodel_usb_find_devices": ["int", ["void*", ref.refType(ffi.types.size_t)]],
+//    "asphodel_tcp_create_device": ["int", ["uint8*", "uint16", "int", "uint8*", ref.refType(DevicePtr)]],
+//    //"getSettingInfo": [ref.refType(SettingInfo), []],
+//    "getChanInfo": [ref.refType(ChannelInfo), []],
+//    "recvCI": ["void", [ArrayType(ChannelInfo)]],
+//
+//    "getDec": [ref.refType(ChannelDecoder), []],
+//    "getSD": [ref.refType(StreamDecoder), []],
+//    "getDD": [ref.refType(DeviceDecoder), []],
+//
+//
+//    "getSI": [ref.refType(StreamInfo), []],
+//
+//    "triggerCb": ["void", [ref.refType(ChannelDecoder)]],
+//    "asphodel_create_channel_decoder": ["int", [ChannelInfoPtr, "uint16", ref.refType(ChannelDecoderPtr)]],
+//
+//
+//    "asphodel_check_accel_self_test": ["int", [ChannelInfoPtr, "double*", "double*", "int*"]],
+//    "asphodel_get_raw_radio_scan_results_blocking": ["int", ["void*", ArrayType("uint32"), ref.refType(ffi.types.size_t)]],
+//    "asphodel_get_radio_scan_results_blocking": ["int", [DevicePtr, "uint32*", ref.refType(ffi.types.size_t)]],
+//
+//    "asphodel_free_radio_scan_results": ["int", ["uint32*"]],
+//    "asphodel_get_radio_scan_power_blocking": ["int", [DevicePtr, "uint32*", "uint8*", ffi.types.size_t]],
+//
+//
+//});
+//
+//let d = example.getDevice();
+//
+//
+//let dev = new DeviceWrapper(example, d);
+//
+//
+//
+//console.log(dev.getRadioScanPower(new Uint32Array([1,2,3,4,5])))
 
 //let d = new DeviceWrapper();
 
@@ -3433,13 +3351,13 @@ export class MemTest{
 
 export function createStreamDecoder(lib: any, stream_and_channels: StreamAndChannelsWrapper, stream_bit_offset: number) {
     let dec = ref.alloc(StreamDecoderPtr);
-    lib.asphodel_create_stream_decoder(stream_and_channels.inner, stream_bit_offset, dec);
+    checkForError(this.lib,lib.asphodel_create_stream_decoder(stream_and_channels.inner, stream_bit_offset, dec));
     return new StreamDecoderWrapper(lib, dec.deref())
 }
 
 export function createChannelDecoder(lib: any, channel_info: ChannelInfoWrapper, channel_bit_offset: number) {
     let ptr = ref.alloc(ChannelDecoderPtr);
-    lib.asphodel_create_channel_decoder(channel_info.inner, channel_bit_offset, ptr);
+    checkForError(this.lib,lib.asphodel_create_channel_decoder(channel_info.inner, channel_bit_offset, ptr));
     return new ChannelDecoderWrapper(lib, ptr.deref());
 }
 
@@ -3463,7 +3381,7 @@ export function createDeviceDecoder(lib: any, stream_and_channels: StreamAndChan
     })
     
     let dec = ref.alloc(DeviceDecoderPtr);
-    lib.asphodel_create_device_decoder(cib, stream_and_channels.length, filler_bits, id_bits, dec);
+    checkForError(this.lib,lib.asphodel_create_device_decoder(cib, stream_and_channels.length, filler_bits, id_bits, dec));
     return new ChannelDecoderWrapper(lib, dec.deref())
 }
 
@@ -3673,4 +3591,6 @@ class TCP {
 export {
     USB, TCP
 }
+
+
 
