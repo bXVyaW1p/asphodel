@@ -489,7 +489,7 @@ const StreamAndChannels = StructType({
 })
 
 const GPIOPortInfo = StructType({
-    name: "uint8*",
+    name: ArrayType("uint8"),
     name_length: "uint8",
     input_pins: "uint32", // pins that are inputs (i.e. their read value cannot be controlled)
     output_pins: "uint32", // pins that are outputs
@@ -774,8 +774,8 @@ export function loadAsphodelLibrary(path: string) {
         "asphodel_set_rgb_values": ["int", [DevicePtr, "int", "void*", "int", AsphodelCommandCallback, "void*"]],
         "asphodel_set_rgb_values_blocking": ["int", [DevicePtr, "int", "void*", "int"]],
 
-        "asphodel_set_rgb_values_hex": ["int", [DevicePtr, "int", "void*", "int", AsphodelCommandCallback, "void*"]],
-        "asphodel_set_rgb_values_hex_blocking": ["int", [DevicePtr, "int", "void*", "int"]],
+        "asphodel_set_rgb_values_hex": ["int", [DevicePtr, "int", "uint32", "int", AsphodelCommandCallback, "void*"]],
+        "asphodel_set_rgb_values_hex_blocking": ["int", [DevicePtr, "int", "uint32", "int"]],
 
         "asphodel_get_led_count": ["int", [DevicePtr, "void*", AsphodelCommandCallback, "void*"]],
         "asphodel_get_led_count_blocking": ["int", [DevicePtr, "void*"]],
@@ -865,8 +865,8 @@ export function loadAsphodelLibrary(path: string) {
         "asphodel_get_channel_chunk": ["int", [DevicePtr, "int", "uint8", "uint8*", "uint8*", AsphodelCommandCallback, "void*"]],
         "asphodel_get_channel_chunk_blocking": ["int", [DevicePtr, "int", "uint8", "uint8*", "uint8*"]],
 
-        "asphodel_channel_specific": ["int", [DevicePtr, "int", "uint8*", "uint8", "uint8*", "uint8", AsphodelCommandCallback, "void*"]],
-        "asphodel_channel_specific_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8", "uint8*", "uint8"]],
+        "asphodel_channel_specific": ["int", [DevicePtr, "int", "uint8*", "uint8", "uint8*", "uint8*", AsphodelCommandCallback, "void*"]],
+        "asphodel_channel_specific_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8", "uint8*", "uint8*"]],
 
         "asphodel_get_channel_calibration": ["int", [DevicePtr, "int", "int*", ChannelCallibrationPtr, AsphodelCommandCallback, "void*"]],
         "asphodel_get_channel_calibration_blocking": ["int", [DevicePtr, "int", "int*", ChannelCallibrationPtr]],
@@ -932,8 +932,8 @@ export function loadAsphodelLibrary(path: string) {
         "asphodel_disable_gpio_overrides": ["int", [DevicePtr, AsphodelCommandCallback, "void*"]],
         "asphodel_disable_gpio_overrides_blocking": ["int", [DevicePtr]],
 
-        "asphodel_get_bus_counts": ["int", [DevicePtr, "int", "int*", AsphodelCommandCallback, "void*"]],
-        "asphodel_get_bus_counts_blocking": ["int", [DevicePtr, "int", "int*"]],
+        "asphodel_get_bus_counts": ["int", [DevicePtr, "int*", "int*", AsphodelCommandCallback, "void*"]],
+        "asphodel_get_bus_counts_blocking": ["int", [DevicePtr, "int*", "int*"]],
 
         "asphodel_set_spi_cs_mode": ["int", [DevicePtr, "int", "uint8", AsphodelCommandCallback, "void*"]],
         "asphodel_set_spi_cs_mode_blocking": ["int", [DevicePtr, "int", "uint8"]],
@@ -1056,7 +1056,10 @@ export function loadAsphodelLibrary(path: string) {
 
         "asphodel_reset_rf_power_timeout": ["int", [DevicePtr, "uint32", AsphodelCommandCallback, "void*"]],
         "asphodel_reset_rf_power_timeout_blocking": ["int", [DevicePtr, "uint32"]],
-
+        
+        
+        
+        //setting.h
         "asphodel_get_setting_count": ["int", [DevicePtr, "int*", AsphodelCommandCallback, "void*"]],
         "asphodel_get_setting_count_blocking": ["int", [DevicePtr, "int*"]],
 
@@ -1096,7 +1099,7 @@ export function loadAsphodelLibrary(path: string) {
         "asphodel_get_supply_info_blocking": ["int", [DevicePtr, "int", SupplyInfoPtr]],
 
         "asphodel_check_supply": ["int", [DevicePtr, "int", "int32", "uint8*", "int", AsphodelCommandCallback, "void*"]],
-        "asphodel_check_supply_blocking": ["int", [DevicePtr, "int", "int32", "uint8*", "int"]],
+        "asphodel_check_supply_blocking": ["int", [DevicePtr, "int", "int32*", "uint8*", "int"]],
 
         // asphodel_tcp.h
         "asphodel_tcp_get_advertisement": [ref.refType(TcpAdvInfo), [DevicePtr]],
@@ -1381,8 +1384,9 @@ export class GPIOPortinfoWrapper {
         this.inner = inner; this.lib = lib;
     }
 
-    public getNameLength() {
-        return this.inner.deref().name_length
+    public getName() {
+        let len = this.inner.deref().name_length
+        return this.inner.deref().name.buffer.reinterpret(len).toString("utf-8")
     }
 
     public getInputPins() {
@@ -1831,7 +1835,7 @@ export class ChannelInfoWrapper {
 /** Free a channel created by asphodel_get_channel() or asphodel_get_channel_blocking(). Channels created any other way
  must NOT be used with this function. */
     public free() {
-        checkForError(this.lib, this.lib.asphodel_free_channel(this.inner))
+        this.lib.asphodel_free_channel(this.inner)
     }
 
     public getStrainBridgeCount() {
@@ -2012,7 +2016,7 @@ export class ChannelCallibrationWrapper {
     }
 
     public getBaseSettingIndex() {
-        this.inner.deref().base_setting_index
+        return this.inner.deref().base_setting_index
     }
 
     public getResolutionSettingIndex() {
@@ -2140,6 +2144,24 @@ export class TcpAdvInfoWrapper {
 }
 
 
+export class ExtraScanResultWrapper {
+    inner: any
+    constructor(inner: any) {
+        this.inner = inner
+    }
+
+    public getSerialNumber() {
+        return this.inner.serial_number
+    }
+
+    public getAsphodelType() {
+        return this.inner.asphodel_type
+    }
+
+    public getDeviceMode() {
+        return this.inner.device_mode
+    }
+}
 
 export class DeviceWrapper {
     inner: ref.Pointer<any>
@@ -2317,7 +2339,7 @@ export class DeviceWrapper {
 
     public async getProtocalVersion() {
         let ptr = ref.alloc(ffi.types.uint16);
-        checkForError(this.lib,this.lib.asphodel_get_protocol_version_blocking(this.inner.deref(), ptr));
+        checkForError(this.lib,this.lib.asphodel_get_protocol_version_blocking(this.inner, ptr));
         return ptr.deref();
     }
 
@@ -2333,7 +2355,7 @@ export class DeviceWrapper {
         checkForError(this.lib,this.lib.asphodel_get_board_info_blocking(this.inner, revptr, buffer, buffer.length));
         return {
             revision: revptr.deref(),
-            board_name: buffer.toString("utf-8")
+            board_name: buffer.toString("utf-8", 0, buffer.indexOf(0))
         }
     }
 
@@ -2380,7 +2402,7 @@ export class DeviceWrapper {
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
-    public async getCommit() {
+    public async getCommitID() {
         let buf = Buffer.alloc(64);
         checkForError(this.lib,this.lib.asphodel_get_commit_id_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
@@ -2560,7 +2582,7 @@ export class DeviceWrapper {
         checkForError(this.lib,this.lib.asphodel_set_device_mode_blocking(this.inner, mode));
     }
 
-    public async getDeviceMode(index: number) {
+    public async getMode(index: number) {
         let ptr = ref.alloc("uint8");
         checkForError(this.lib,this.lib.asphodel_get_device_mode_blocking(this.inner, ptr));
         return ptr.deref()
@@ -2579,8 +2601,8 @@ export class DeviceWrapper {
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
 
-    public async getSettingDefault(index: number) {
-        let buf = Buffer.alloc(256);
+    public async getSettingDefault(index: number, length:number) {
+        let buf = Buffer.alloc(length);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_setting_default_blocking(this.inner, index, buf, ptr))
         let ubuf = new Uint8Array(ptr.deref());
@@ -2588,8 +2610,8 @@ export class DeviceWrapper {
         return ubuf
     }
 
-    public async getCustomEnumCounts() {
-        let buf = Buffer.alloc(256);
+    public async getCustomEnumCounts(length:number) {
+        let buf = Buffer.alloc(length);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_custom_enum_counts_blocking(this.inner, buf, ptr))
         let ubuf = new Uint8Array(ptr.deref());
@@ -2615,11 +2637,11 @@ export class DeviceWrapper {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_setting_category_name_blocking(this.inner, index, buf, ptr));
-        return buf.toString("utf-8", 0, buf.indexOf(0));
+        return buf.toString("utf-8", 0, ptr.deref());
     }
 
-    public async getSettingCategorySetting(index: number) {
-        let buf = Buffer.alloc(256);
+    public async getSettingCategorySetting(index: number, length:number) {
+        let buf = Buffer.alloc(length);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_setting_category_settings_blocking(this.inner, index, buf, ptr))
         let ubuf = new Uint8Array(ptr.deref());
@@ -2639,7 +2661,7 @@ export class DeviceWrapper {
         return ptr.deref();
     }
 
-    public async getSettingPortName(index: number) {
+    public async getGPIOPortName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_gpio_port_name_blocking(this.inner, index, buf, ptr));
@@ -2694,6 +2716,9 @@ export class DeviceWrapper {
     public async doI2cRead(index: number, addr: number, read_length: number) {
         let txbuf = Buffer.alloc(read_length);
         checkForError(this.lib,this.lib.asphodel_do_i2c_read_blocking(this.inner, index, addr, txbuf, txbuf.length))
+        let ubuf = new Uint8Array(read_length)
+        txbuf.copy(ubuf)
+        return ubuf
     }
 
     public async doI2cWriteRead(index: number, addr: number, txdata: Uint8Array, read_length: number) {
@@ -2723,7 +2748,7 @@ export class DeviceWrapper {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_info_region_name_blocking(this.inner, index, buf, ptr));
-        return buf.toString("utf-8", 0, buf.indexOf(0));
+        return buf.toString("utf-8", 0, ptr.deref());
     }
 
     public async getInfoRegion(index: number) {
@@ -2828,15 +2853,15 @@ export class DeviceWrapper {
         let avail = ref.alloc("int")
         let ci = ref.alloc("int", 0)
         let inv = ref.alloc("int", 0)
-        let sca = ref.alloc("int", 0)
-        let off = ref.alloc("int", 0)
+        let sca = ref.alloc("float", 0)
+        let off = ref.alloc("float", 0)
 
         checkForError(this.lib,this.lib.asphodel_get_stream_rate_info_blocking(this.inner, index, avail, ci, inv, sca, off));
 
         return {
             available: avail.deref(),
             channel_index: ci.deref(),
-            invert: ci.deref(),
+            invert: inv.deref(),
             scale: sca.deref(),
             offset: off.deref()
         }
@@ -2858,7 +2883,7 @@ export class DeviceWrapper {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_channel_name_blocking(this.inner, index, buf, ptr));
-        return buf.toString("utf-8", 0, buf.indexOf(0));
+        return buf.toString("utf-8", 0, ptr.deref());
     }
 
     public async getChannelInfo(index: number) {
@@ -2893,7 +2918,7 @@ export class DeviceWrapper {
         }
     }
 
-    public async channelSpecific(index: number, data: Uint8Array, reply_len) {
+    public async channelSpecific(index: number, data: Uint8Array, reply_len:number) {
         let rbuf = Buffer.alloc(reply_len);
         let rlen = ref.alloc("uint8", reply_len);
         let dbuf = Buffer.from(data);
@@ -2906,7 +2931,7 @@ export class DeviceWrapper {
         }
     }
 
-    public getChannelCalibration(index: number) {
+    public async getChannelCalibration(index: number) {
         let avail = ref.alloc("int")
         let ptr = ref.alloc(ChannelCallibration);
         checkForError(this.lib,this.lib.asphodel_get_channel_calibration_blocking(this.inner, index, avail, ptr));
@@ -2932,15 +2957,23 @@ export class DeviceWrapper {
     public async getSupplyInfo(index: number) {
         let ptr = ref.alloc(SupplyInfo);
         checkForError(this.lib,this.lib.asphodel_get_supply_info_blocking(this.inner, index, ptr));
-        return new ChannelCallibrationWrapper(this.lib, ptr)
+        return new SupplyInfoWrapper(this.lib, ptr)
     }
 
     public async checkSupply(index: number, tries: number) {
-        let m = ref.alloc("uint32", 0);
-        let r = ref.alloc("uint8", 0)
+        var m = ref.alloc("uint32");
+        var r = ref.alloc("uint8")
+        if(m.isNull()) {
+            throw new Error("Failed to allocate memmory")
+        }
+
+        if(r.isNull()) {
+            throw new Error("Failed to allocate memmory")
+        }
+
         checkForError(this.lib,this.lib.asphodel_check_supply_blocking(this.inner, index, m, r, tries));
         return {
-            measurement: m.deref(),
+            measurement:m.deref(),
             result: r.deref()
         }
     }
@@ -3090,27 +3123,27 @@ export class DeviceWrapper {
     }
 
     public async getRawRadioExtraScanResults(length: number) {
-        let res = Buffer.alloc(length * 4);
+        let res = Buffer.alloc(ExtraScanResult.size * length);
         let lptr = ref.alloc(ffi.types.size_t, length);
         checkForError(this.lib,this.lib.asphodel_get_raw_radio_extra_scan_results_blocking(this.inner, res, lptr))
-        let ub = new Uint32Array(lptr.deref() as number);
-        for (let i = 0; i < ub.length; i++) {
-          ub[i] = os.endianness() == "LE" ? res.readUint32LE(i * 4) : res.readUint32BE(i * 4)
+        let results: ExtraScanResultWrapper[] = []
+        for (let i = 0; i < (lptr.deref() as number); i++) {
+            results.push(new ExtraScanResultWrapper(new ExtraScanResult(res.subarray(i * ExtraScanResult.size))))
         }
-        return ub
+        return results
     }
 
     public async getRadioExtraScanResults(length: number) {
-        let res = ref.alloc(ArrayType("uint32"));
+        let res = ref.alloc(ArrayType(ExtraScanResult));
         let lptr = ref.alloc(ffi.types.size_t, length);
-        checkForError(this.lib,this.lib.asphodel_get_radio_scan_results_blocking(this.inner, res, lptr))
-        let ub = new Uint32Array(lptr.deref() as number);
-        let resbuff = res.deref().buffer.reinterpret(lptr.deref() as number * 4)
-        for (let i = 0; i < ub.length; i++) {
-            ub[i] = os.endianness() == "LE" ? resbuff.readUint32LE(i * 4) : resbuff.readUint32BE(i * 4)
+        checkForError(this.lib,this.lib.asphodel_get_radio_extra_scan_results_blocking(this.inner, res, lptr))
+        let results: ExtraScanResultWrapper[] = []
+        let resbuff = res.deref().buffer.reinterpret(lptr.deref() as number * ExtraScanResult.size)
+        for (let i = 0; i < (lptr.deref() as number); i++) {
+            results.push(new ExtraScanResultWrapper(new ExtraScanResult(resbuff.subarray(i * ExtraScanResult.size))))
         }
         this.lib.asphodel_free_radio_extra_scan_results(resbuff)
-        return ub
+        return results
     }
 
     public async getRadioScanPower(serials: Uint32Array) {
@@ -3149,7 +3182,7 @@ export class DeviceWrapper {
         checkForError(this.lib,this.lib.asphodel_get_radio_ctrl_vars_blocking(this.inner, arr, lenptr));
         let iarr = new Uint8Array(len);
         arr.copy(iarr);
-        return arr
+        return iarr
     }
 
     public async getRadioDefaultSerial() {
@@ -3306,7 +3339,7 @@ export class DeviceWrapper {
 //    console.log(`${i}`, d.close())
 //}
 
-export class version {
+export class Version {
     lib: any
     constructor(lib: any) {
         this.lib = lib
@@ -3423,7 +3456,7 @@ class USB {
 
     /** Return the version string for the running version of the usb backend (libusb-1.0 in current implementations)
      */
-    public version() {
+    public backendVersion() {
         return this.lib.asphodel_usb_get_backend_version()
     }
 
@@ -3433,13 +3466,11 @@ class USB {
     the address pointed to by list_size. ALL returned devices must be freed (either immediately or at a later point)
     by the calling code by calling the AsphodelDevice_t free_device function pointer.
     */
-    public findDevices(n: number) {
+    public async findDevices(n: number) {
         let list = Buffer.alloc(n * DevicePtr.size)
         let lenPtr = ref.alloc("int", n);
 
-        if(this.lib.asphodel_usb_find_devices(list as ref.Pointer<unknown>, lenPtr) != 0) {
-            throw new Error("Failed to find devices")
-        }
+        checkForError(this.lib, this.lib.asphodel_usb_find_devices(list as ref.Pointer<unknown>, lenPtr))
 
         let devices: DeviceWrapper[] = [];
 
@@ -3594,3 +3625,263 @@ export {
 
 
 
+//export function getTestLib() {
+//
+//return ffi.Library("./example.so", {
+//    "asphodel_usb_find_devices": ["int", ["void*", ref.refType(ffi.types.size_t)]],
+//    "asphodel_usb_init": ["int", []],
+//
+//    'asphodel_error_name': ["string", ["int32"]],  // Function with no arguments and void return type
+//
+//    
+//    "asphodel_get_supply_count_blocking": ["int", [DevicePtr, "int*"]],
+//
+//    "asphodel_get_supply_name_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+//    "asphodel_get_supply_info_blocking": ["int", [DevicePtr, "int", SupplyInfoPtr]],
+//
+//    "asphodel_check_supply_blocking": ["int", [DevicePtr, "int", "int32*", "uint8*", "int"]],
+//
+//
+//    "asphodel_get_stream_count_blocking": ["int", [DevicePtr, "int*", "uint8*", "uint8*"]],
+//
+//    "asphodel_get_stream_blocking": ["int", [DevicePtr, "int", ref.refType(StreamInfoPtr)]],
+//
+//    "asphodel_free_stream": ["int", [StreamInfoPtr]],
+//
+//    "asphodel_get_stream_channels_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+//    "asphodel_get_stream_format_blocking": ["int", [DevicePtr, "int", StreamInfoPtr]],
+//
+//    "asphodel_enable_stream_blocking": ["int", [DevicePtr, "int", "int"]],
+//
+//    "asphodel_warm_up_stream_blocking": ["int", [DevicePtr, "int", "int"]],
+//
+//    "asphodel_get_stream_status_blocking": ["int", [DevicePtr, "int", "int*", "int*"]],
+//
+//    "asphodel_get_stream_rate_info_blocking": ["int", [DevicePtr, "int", "int*", "int*", "int*", "float*", "float*"]],
+//
+//    "asphodel_get_channel_count_blocking": ["int", [DevicePtr, "int*"]],
+//
+//    "asphodel_get_channel_blocking": ["int", [DevicePtr, "int", ref.refType(ChannelInfoPtr)]],
+//
+//    "asphodel_free_channel": ["int", [ChannelInfoPtr]],
+//
+//    "asphodel_get_channel_name_blocking": ["int", [DevicePtr, "int", "uint8*", ref.refType("uint8")]],
+//
+//    "asphodel_get_channel_info_blocking": ["int", [DevicePtr, "int", ChannelInfoPtr]],
+//
+//    "asphodel_get_channel_coefficients_blocking": ["int", [DevicePtr, "int", "float*", "uint8*"]],
+//
+//    "asphodel_get_channel_chunk_blocking": ["int", [DevicePtr, "int", "uint8", "uint8*", "uint8*"]],
+//
+//    "asphodel_channel_specific_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8", "uint8*", "uint8*"]],
+//
+//    "asphodel_get_channel_calibration_blocking": ["int", [DevicePtr, "int", "int*", ChannelCallibrationPtr]],
+////===========================================================setting
+//    "asphodel_get_setting_count_blocking": ["int", [DevicePtr, "int*"]],
+//
+//    "asphodel_get_setting_name_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+//    "asphodel_get_setting_info_blocking": ["int", [DevicePtr, "int", SettingInfoPtr]],
+//
+//    "asphodel_get_setting_default_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+//    "asphodel_get_custom_enum_counts_blocking": ["int", [DevicePtr, "uint8*", "uint8*"]],
+//
+//    "asphodel_get_custom_enum_value_name_blocking": ["int", [DevicePtr, "int", "int", "uint8*", "uint8*"]],
+//
+//    "asphodel_get_setting_category_count_blocking": ["int", [DevicePtr, "int*"]],
+//
+//    "asphodel_get_setting_category_name_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+//    "asphodel_get_setting_category_settings_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+///// =============power
+//    "asphodel_enable_rf_power_blocking": ["int", [DevicePtr, "int"]],
+//
+//    "asphodel_get_rf_power_status_blocking": ["int", [DevicePtr, "int*"]],
+//
+//    "asphodel_get_rf_power_ctrl_vars_blocking": ["int", [DevicePtr, "uint8*", "uint8*"]],
+//
+//    "asphodel_reset_rf_power_timeout_blocking": ["int", [DevicePtr, "uint32"]],
+//
+///// =======radio
+//
+//"asphodel_stop_radio_blocking": ["int", [DevicePtr]],
+//
+//"asphodel_start_radio_scan_blocking": ["int", [DevicePtr]],
+//
+//"asphodel_get_raw_radio_scan_results_blocking": ["int", [DevicePtr, ArrayType("uint32"), ref.refType(ffi.types.size_t)]],
+//
+//"asphodel_get_radio_scan_results_blocking": ["int", [DevicePtr, "uint32*", ref.refType(ffi.types.size_t)]],
+//
+//"asphodel_free_radio_scan_results": ["int", ["uint32*"]],
+//
+//"asphodel_get_raw_radio_extra_scan_results_blocking": ["int", [DevicePtr, ExtraScanResultPtr, ref.refType(ffi.types.size_t)]],
+//
+//"asphodel_get_radio_extra_scan_results_blocking": ["int", [DevicePtr, ExtraScanResultPtr, ref.refType(ffi.types.size_t)]],
+//
+//"asphodel_free_radio_extra_scan_results": ["int", [ExtraScanResultPtr]],
+//
+//
+//"asphodel_get_radio_scan_power_blocking": ["int", [DevicePtr, "uint32*", "uint8*", ffi.types.size_t]],
+//
+//"asphodel_connect_radio_blocking": ["int", [DevicePtr, "uint32"]],
+//
+//
+//"asphodel_get_radio_status_blocking": ["int", [DevicePtr, "int*", "uint32*", "uint8*", "int*"]],
+//
+//"asphodel_get_radio_ctrl_vars_blocking": ["int", [DevicePtr, "uint8*", "uint8*"]],
+//
+//"asphodel_get_radio_default_serial_blocking": ["int", [DevicePtr, "uint32*"]],
+//
+//"asphodel_start_radio_scan_boot_blocking": ["int", [DevicePtr]],
+//
+//"asphodel_connect_radio_boot_blocking": ["int", [DevicePtr, "uint32"]],
+//
+//"asphodel_stop_remote_blocking": ["int", [DevicePtr]],
+//
+//"asphodel_restart_remote_blocking": ["int", [DevicePtr]],
+//
+//"asphodel_get_remote_status_blocking": ["int", [DevicePtr, "int*", "uint32*", "uint8*"]],
+//
+//
+//
+//"asphodel_restart_remote_app_blocking": ["int", [DevicePtr]],
+//
+//
+//"asphodel_restart_remote_boot_blocking": ["int", [DevicePtr]],
+//
+//
+//// asphodel_low_level.h
+//"asphodel_get_gpio_port_count_blocking": ["int", [DevicePtr, "int*"]],
+//
+//"asphodel_get_gpio_port_name_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+//"asphodel_get_gpio_port_info_blocking": ["int", [DevicePtr, "int", GPIOPortInfoPtr]],
+//
+//"asphodel_get_gpio_port_values_blocking": ["int", [DevicePtr, "int", "uint32*"]],
+//
+//"asphodel_set_gpio_port_modes_blocking": ["int", [DevicePtr, "int", "uint8", "uint32"]],
+//
+//"asphodel_disable_gpio_overrides_blocking": ["int", [DevicePtr]],
+//
+//"asphodel_get_bus_counts_blocking": ["int", [DevicePtr, "int*", "int*"]],
+//
+//"asphodel_set_spi_cs_mode_blocking": ["int", [DevicePtr, "int", "uint8"]],
+//
+//"asphodel_do_spi_transfer_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*", "uint8"]],
+//
+//"asphodel_do_i2c_write_read_blocking": ["int", [DevicePtr, "int", "uint8", "uint8*", "uint8", "uint8*", "uint8"]],
+//
+//"asphodel_do_i2c_write_blocking": ["int", [DevicePtr, "int", "uint8", "uint8*", "uint8"]],
+//
+//"asphodel_do_i2c_read_blocking": ["int", [DevicePtr, "int", "uint8", "uint8*", "uint8"]],
+//
+//
+//"asphodel_do_radio_fixed_test_blocking": ["int", [DevicePtr, "uint16", "uint16", "uint8"]],
+//
+//"asphodel_do_radio_sweep_test_blocking": ["int", [DevicePtr, "uint16", "uint16", "uint16", "uint16", "uint8"]],
+//
+//"asphodel_get_info_region_count_blocking": ["int", [DevicePtr, "int*"]],
+//
+//"asphodel_get_info_region_name_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+//"asphodel_get_info_region_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+//"asphodel_get_stack_info_blocking": ["int", [DevicePtr, "uint32*"]],
+//
+//"asphodel_echo_raw_blocking": ["int", [DevicePtr, "uint8*", ffi.types.size_t, "uint8*", ref.refType(ffi.types.size_t)]],
+//
+//
+//"asphodel_echo_transaction_blocking": ["int", [DevicePtr, "uint8*", ffi.types.size_t, "uint8*", ref.refType(ffi.types.size_t)]],
+//
+//
+//"asphodel_echo_params_blocking": ["int", [DevicePtr, "uint8*", ffi.types.size_t, "uint8*", ref.refType(ffi.types.size_t)]],
+//
+//            // asphodel_device.h
+//            "asphodel_get_protocol_version_blocking": ["int", [DevicePtr, "uint16*"]],
+//            
+//            "asphodel_get_protocol_version_string_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//            
+//            "asphodel_get_board_info_blocking": ["int", [DevicePtr, "void*", "void*", ffi.types.size_t]],
+//            
+//            "asphodel_get_user_tag_locations_blocking": ["int", [DevicePtr, "void*"]],
+//            
+//            "asphodel_get_build_info_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//            
+//            "asphodel_get_build_date_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//            
+//            "asphodel_get_commit_id_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_get_repo_branch_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_get_repo_name_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_get_chip_family_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_get_chip_model_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_get_chip_id_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_get_nvm_size_blocking": ["int", [DevicePtr, ref.refType(ffi.types.size_t)]],
+//    
+//            "asphodel_erase_nvm_blocking": ["int", [DevicePtr]],
+//    
+//            "asphodel_write_nvm_raw_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_write_nvm_section_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_read_nvm_raw_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ref.refType(ffi.types.size_t)]],
+//    
+//            "asphodel_read_nvm_section_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_read_user_tag_string_blocking": ["int", [DevicePtr, ffi.types.size_t, ffi.types.size_t, "void*"]],
+//    
+//            "asphodel_write_user_tag_string_blocking": ["int", [DevicePtr, ffi.types.size_t, ffi.types.size_t, "void*"]],
+//    
+//            "asphodel_get_nvm_modified_blocking": ["int", [DevicePtr, "void*"]],
+//    
+//            "asphodel_get_nvm_hash_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_get_setting_hash_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_flush_blocking": ["int", [DevicePtr]],
+//    
+//            "asphodel_reset_blocking": ["int", [DevicePtr]],
+//    
+//            "asphodel_get_bootloader_info_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//    
+//            "asphodel_bootloader_jump_blocking": ["int", [DevicePtr]],
+//    
+//            "asphodel_get_reset_flag_blocking": ["int", [DevicePtr, "void*"]],
+//    
+//            "asphodel_clear_reset_flag_blocking": ["int", [DevicePtr]],
+//    
+//            "asphodel_get_rgb_count_blocking": ["int", [DevicePtr, "void*"]],
+//    
+//            "asphodel_get_rgb_values_blocking": ["int", [DevicePtr, "int", "void*"]],
+//    
+//            "asphodel_set_rgb_values_blocking": ["int", [DevicePtr, "int", "void*", "int"]],
+//    
+//            "asphodel_set_rgb_values_hex_blocking": ["int", [DevicePtr, "int", "uint32", "int"]],
+//    
+//            "asphodel_get_led_count_blocking": ["int", [DevicePtr, "void*"]],
+//    
+//            "asphodel_get_led_value_blocking": ["int", [DevicePtr, "int", "void*"]],
+//    
+//            "asphodel_set_led_value_blocking": ["int", [DevicePtr, "int", "uint8", "int"]],
+//    
+//            "asphodel_set_device_mode_blocking": ["int", [DevicePtr, "uint8"]],
+//    
+//            "asphodel_get_device_mode_blocking": ["int", [DevicePtr, "uint8*"]],
+//
+//            "asphodel_supports_rf_power_commands": ["int", [DevicePtr]],
+//            "asphodel_supports_radio_commands": ["int", [DevicePtr]],
+//            "asphodel_supports_remote_commands": ["int", [DevicePtr]],
+//            "asphodel_supports_bootloader_commands": ["int", [DevicePtr]],
+//    
+//    
+//})
+//}
