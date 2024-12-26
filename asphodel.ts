@@ -1,8 +1,9 @@
-import * as StructType from 'ref-struct-napi';
-import * as UnionType from 'ref-union-napi';
-import * as ArrayType from 'ref-array-napi'
-import * as ffi from 'ffi-napi';
-import * as ref from 'ref-napi';
+import StructType from 'ref-struct-napi';
+import UnionType from 'ref-union-napi';
+import ArrayType from 'ref-array-napi'
+import ffi from 'ffi-napi';
+import ref from 'ref-napi';
+
 
 //let dummy = loadAsphodelLibrary("");
 
@@ -336,6 +337,8 @@ export const STRAIN_SET_OUTPUTS = 0x01
 export const ACCEL_ENABLE_SELF_TEST = 0x01
 
 const AsphodelCommandCallback = "void*"
+
+console.log("StructType: ", StructType);
 
 const Device = StructType({
     protocal: ffi.types.int,
@@ -3288,6 +3291,50 @@ export class DeviceWrapper {
 //
 //
 //console.log(dev.getRadioScanPower(new Uint32Array([1,2,3,4,5])))
+// const example = ffi.Library("./libasphodel.dylib", {
+//     //'hello_world': ["void", ["string"]],  // Function with no arguments and void return type
+//     //'add_numbers': ['int', ['int', 'int']]  // Function that takes two ints and returns an int
+//     'getDevice': [ref.refType(Device), []],
+//     "asphodel_get_user_tag_locations_blocking": ["int", [DevicePtr, "void*"]],
+//     "asphodel_get_build_info_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
+//     "asphodel_read_nvm_section_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t]],
+//     "asphodel_usb_find_devices": ["int", ["void*", ref.refType(ffi.types.size_t)]],
+//     "asphodel_tcp_create_device": ["int", ["uint8*", "uint16", "int", "uint8*", ref.refType(DevicePtr)]],
+//     //"getSettingInfo": [ref.refType(SettingInfo), []],
+//     "getChanInfo": [ref.refType(ChannelInfo), []],
+//     "recvCI": ["void", [ArrayType(ChannelInfo)]],
+
+//     "getDec": [ref.refType(ChannelDecoder), []],
+//     "getSD": [ref.refType(StreamDecoder), []],
+//     "getDD": [ref.refType(DeviceDecoder), []],
+
+
+//     "getSI": [ref.refType(StreamInfo), []],
+
+//     "triggerCb": ["void", [ref.refType(ChannelDecoder)]],
+//     "asphodel_create_channel_decoder": ["int", [ChannelInfoPtr, "uint16", ref.refType(ChannelDecoderPtr)]],
+
+
+//     "asphodel_check_accel_self_test": ["int", [ChannelInfoPtr, "double*", "double*", "int*"]],
+//     "asphodel_get_raw_radio_scan_results_blocking": ["int", ["void*", ArrayType("uint32"), ref.refType(ffi.types.size_t)]],
+//     "asphodel_get_radio_scan_results_blocking": ["int", [DevicePtr, "uint32*", ref.refType(ffi.types.size_t)]],
+
+//     "asphodel_free_radio_scan_results": ["int", ["uint32*"]],
+//     "asphodel_get_radio_scan_power_blocking": ["int", [DevicePtr, "uint32*", "uint8*", ffi.types.size_t]],
+
+
+// });
+
+// console.log("ERXAMPLEP: ",example)
+
+// let d = example.getDevice();
+
+
+// let dev = new DeviceWrapper(example, d);
+
+
+
+// console.log(dev.getRadioScanPower(new Uint32Array([1,2,3,4,5])))
 
 //let d = new DeviceWrapper();
 
