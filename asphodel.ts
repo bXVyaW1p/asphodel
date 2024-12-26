@@ -1899,16 +1899,6 @@ export class ChannelInfoWrapper {
 
 }
 
-
-
-//let sin = example.getChanInfo()
-//let wr = new ChannelInfoWrapper(sin)
-
-//let v = wr.checkAccelSelfTest(new Float64Array([1,2,3]), new Float64Array([11,12,13]))
-//wr.getCoefficients()
-//console.log(wr.createDecoder(0).getSubChannels())
-
-
 export class StreamAndChannelsWrapper {
     inner: any
     si: any
@@ -1966,16 +1956,6 @@ export class StreamAndChannelsWrapper {
         return this.stream_id
     }
 }
-
-
-
-//new StreamAndChannelsWrapper(0, new StreamInfoWrapper(example.getSI()),
-//    [
-//    new ChannelInfoWrapper(example.getChanInfo()),
-//    new ChannelInfoWrapper(example.getChanInfo()),
-//    new ChannelInfoWrapper(example.getChanInfo()),
-//    new ChannelInfoWrapper(example.getChanInfo()),
-//])
 
 export class SupplyInfoWrapper {
     inner: any
@@ -2178,27 +2158,47 @@ export class DeviceWrapper {
         this.lib = lib;
     }
 
-
+/**
+Open the device for usage. Must be called before any others.
+ * 
+ */
     public open() {
         if (this.inner.deref().open_device(this.inner) != 0) {
             throw new Error("Failed to open device")
         }
     }
+/**
+Close the device and release any shared resources (e.g. usb handles, tcp sockets).
 
+ */
     public close() {
         this.inner.deref().close_device(this.inner)
     }
+/**
+	Free memory held by the device.
 
+ */
     public free() {
         this.inner.deref().free_device(this.inner)
     }
-
+/**
+	Copy the device's serial number (UTF-8 encoded) into the specified buffer.
+	The copy will be null terminated, and use at most buffer_size bytes (including the null).
+	
+ * @returns 
+ */
     public getSerialNumber(): string {
         let buf = Buffer.alloc(64);
         checkForError(this.lib,this.inner.deref().get_serial_number(this.inner, buf, 64))
         return buf.toString("utf-8")
     }
-
+/**
+	Start an Asphodel command transfer. The specified callback will be called when finished.
+ 
+ * @param command 
+ * @param parameters 
+ * @param callback 
+ */
     public doTransfer(command: number, parameters: number[], callback: (status: number, params: Uint8Array) => void) {
         let buf = Buffer.from(new Uint8Array(parameters));
 
@@ -2210,7 +2210,15 @@ export class DeviceWrapper {
 
         checkForError(this.lib,this.inner.deref().do_transfer(this.inner, command, buf, buf.length, this.transfer_cb, buf))
     }
+/**
 
+	Start an Asphodel command transfer that does not return (e.g. reset, bootloader jump).
+	The specified callback will be called when the transfer is finished.
+	
+ * @param command 
+ * @param parameters 
+ * @param callback 
+ */
     public doTransferReset(command: number, parameters: number[], callback: (status: number, params: Uint8Array) => void) {
         let buf = Buffer.from(new Uint8Array(parameters));
 
@@ -2222,7 +2230,18 @@ export class DeviceWrapper {
 
         checkForError(this.lib,this.inner.deref().do_transfer_reset(this.inner, command, buf, buf.length, this.transfer_cb, buf))
     }
+/**
 
+	Start a continuous set of stream transfers. The specified callback will be called after each transfer is
+	finished. The timeout is specified in milliseconds. The packet_count specifies how many packets should be lumped
+	together, if possible. The transfer_count specifies how many transfers should be run in parallel, to avoid
+	losing data while handling received data. The poll_device function must be called continually to receive data.
+	
+ * @param packet_count 
+ * @param transfer_count 
+ * @param timeout 
+ * @param callback 
+ */
     public startStreamingPackets(packet_count: number, transfer_count: number, timeout: number,
         callback: (status: number, data: Uint8Array, packet_size: number, packet_count: number) => void
     ) {
@@ -2237,23 +2256,46 @@ export class DeviceWrapper {
         )
         checkForError(this.lib,this.inner.deref().start_streaming_packets(this.inner, packet_count, transfer_count, timeout, this.streaming_cb, ref.NULL))
     }
+/**
+	Stop the transfers started with start_streaming_packets.
 
+ */
     public stopStreamingPackets() {
         checkForError(this.lib,this.inner.deref().stop_streaming_packets(this.inner));
     }
+/**
 
+Return the size of individual stream packets. Data collected with read_stream_packets will be a multiple of
+this size.
+ * @returns 
+ */
     public getStreamPacketLength() {
         return this.inner.deref().get_stream_packet_length(this.inner);
     }
+/**
+	Return the maximum length of the outgoing parameters on this device.
 
+ * @returns 
+ */
     public getMaxOutgoingParamLength() {
         return this.inner.deref().get_max_outgoing_param_length(this.inner);
     }
+/**
+	Return the maximum length of the incoming parameters on this device.
 
+ * @returns 
+ */
     public getMaxIncomingParamLength() {
         return this.inner.deref().get_max_incoming_param_length(this.inner);
     }
-
+/**
+	Get streaming packets in a blocking fashion. Do not mix with startStreamingPackets(). The buffer must be able
+	to hold at least count bytes. NOTE: count should be a multiple of getStreamPacketLength().
+	
+ * @param count 
+ * @param timeout 
+ * @returns 
+ */
     public async getStreamPackets(count: number, timeout: number) {
         let packet_length = this.getStreamPacketLength();
         if (count % packet_length != 0) {
@@ -2266,13 +2308,26 @@ export class DeviceWrapper {
         ref.reinterpret(buf, countptr.deref()).copy(resbuff)
         return resbuff
     }
+/**
+	Used to convert non-blocking functions to blocking ones by calling this in a loop.
 
+ * @param milliseconds 
+ * @returns 
+ */
     public poll(milliseconds: number): number {
         var completed = ref.alloc(ffi.types.int, 0);
         checkForError(this.lib,(this.inner.deref().poll_device(this.inner, milliseconds, completed)))
         return completed.deref();
     }
-
+/**
+	Set the connect callback. If the device is already connected, this will immediately call the callback. The
+	callback will be called whenever the device experiences a connect or disconnect. Call this function with a NULL
+	callback to remove any previously registered callback. This function is implemented for all device types, but
+	really only makes sense in the context of remote devices. Non-remote devices will immediately call the callback
+	with the connect parameter set. Non-remote devices will never have a disconnect event.
+	
+ * @param callback 
+ */
     public setConnectCallBack(callback: (status: number, connected: number) => void) {
         this.connect_cb = ffi.Callback("void", ["int", "int", "void*"],
             (status: number, connected: number, closure) => {
@@ -2280,35 +2335,68 @@ export class DeviceWrapper {
             })
         checkForError(this.lib,this.inner.deref().set_connect_callback(this.inner, this.connect_cb, ref.NULL))
     }
-
+/**
+	This will wait for the device to be connected. NOTE: this will override any existing callback set with
+	`setConnectCallback()`. This function is implemented for all device types, but really only makes sense in the
+	context of remote devices. Non-remote devices will return immediately.
+	
+ * @param timeout 
+ */
     public waitForConnect(timeout: number) {
         this.inner.deref().wait_for_connect(this.inner, timeout)
     }
+/**
 
+	Return the radio's remote device. This function will return an error for non-radio devices. The device should be
+	freed with free() as usual.
+ * @returns 
+ */
     public getRemoteDevice(): DeviceWrapper {
         let pointer = ref.alloc(ref.refType(Device));
         checkForError(this.lib,this.inner.deref().get_remote_device(this.inner, pointer))
         return new DeviceWrapper(this.lib, pointer.deref())
     }
-
+/**
+	This function will try to find another AsphodelDevice_t that has the same location string as the current device.
+	This can be used after a device is reset or disconnected. NOTE: this may return the same device! In that case
+	the old device should *not* be freed!
+ * @returns 
+ */
     public ReconnectDevice(): DeviceWrapper {
         let pointer = ref.alloc(ref.refType(Device));
         checkForError(this.lib,this.inner.deref().reconnect_device(this.inner, pointer))
         return new DeviceWrapper(this.lib, pointer.deref())
     }
+/**
 
+	Like `reconnectDevice()`, but this will try to connect to an asphodel compatible bootloader for the device.
+	The only time this makes sense is after a call to `asphodelBootloaderJump()` on a device with an Asphodel
+	bootloader. All other situations should use `reconnectDevice()` directly.
+ * @returns 
+ */
     public ReconnectDeviceBootloader(): DeviceWrapper {
         let pointer = ref.alloc(ref.refType(Device));
         checkForError(this.lib,this.inner.deref().reconnect_device_bootloader(this.inner, pointer))
         return new DeviceWrapper(this.lib, pointer.deref())
     }
+/**
 
+	Like `reconnectDevice()`, but this will try to connect to a non-bootloader device. The only time this makes sense
+	is after a call to `bootloaderStartProgram()` on an Asphodel bootloader. All other situations should
+	use `reconnectDevice()` directly.
+ * @returns 
+ */
     public ReconnectDeviceApplication(): DeviceWrapper {
         let pointer = ref.alloc(ref.refType(Device));
         checkForError(this.lib,this.inner.deref().reconnect_device_application(this.inner, pointer))
         return new DeviceWrapper(this.lib, pointer.deref())
     }
-
+/**
+	This callback will be called whenever there is a device error that cannot be associated with a function call.
+	NOTE: because of race conditions, the callback and closure should not be altered while the device is in use.
+	
+ * @param callback 
+ */
     public errorCallback(callback: (devicewrapper: DeviceWrapper, status: number) => void) {
         this.error_cb = ffi.Callback("int", ["void*", "int", "void*"],
             (dev, status: number, closure) => {
@@ -2337,19 +2425,30 @@ export class DeviceWrapper {
     public transportType(): string {
         return this.inner.deref().transport_type
     }
-
+/**
+Return the protocol version supported by this device.
+ 
+ * @returns 
+ */
     public async getProtocalVersion() {
         let ptr = ref.alloc(ffi.types.uint16);
         checkForError(this.lib,this.lib.asphodel_get_protocol_version_blocking(this.inner, ptr));
         return ptr.deref();
     }
-
+/**
+ * 
+ * @returns 
+ */
     public async getProtocalVersionString() {
-        let buffer = Buffer.alloc(64);
+        let buffer = Buffer.alloc(128);
         checkForError(this.lib,this.lib.asphodel_get_protocol_version_string_blocking(this.inner, buffer, buffer.length));
         return buffer.toString("utf-8");
     }
+/**
+Return the board revision number along with board name in string form (UTF-8).
 
+ * @returns 
+ */
     public async getBoardInfo() {
         let revptr = ref.alloc("uint8");
         let buffer = Buffer.alloc(64);
@@ -2359,7 +2458,11 @@ export class DeviceWrapper {
             board_name: buffer.toString("utf-8", 0, buffer.indexOf(0))
         }
     }
+/**
+Fill an array with the user tag offsets and lengths. Locations must be an arary of length 6.
 
+ * @returns 
+ */
     public async getUserTagLocations() {
         let buffer = Buffer.alloc(6 * ffi.types.size_t.size);
         checkForError(this.lib,this.lib.asphodel_get_user_tag_locations_blocking(this.inner, buffer));
@@ -2390,77 +2493,136 @@ export class DeviceWrapper {
         if (a32) return ubuf32;
         return ubuf64
     }
+/**
+Return the build info of the device's firmware in string form (UTF-8).
 
+ * @returns 
+ */
     public async getBuildInfo() {
         let buf = Buffer.alloc(128);
         checkForError(this.lib,this.lib.asphodel_get_build_info_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
+/**
+Return the build date of the device's firmware in string form (UTF-8).
 
+ * @returns 
+ */
     public async getBuildDate() {
         let buf = Buffer.alloc(64);
         checkForError(this.lib,this.lib.asphodel_get_build_date_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
+/**
+Return the commit id of the device's firmware in string form (UTF-8).
 
+ * @returns 
+ */
     public async getCommitID() {
         let buf = Buffer.alloc(64);
         checkForError(this.lib,this.lib.asphodel_get_commit_id_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
-
+/**
+Return the repository branch name of the device's firmware (UTF-8).
+ 
+ * @returns 
+ */
     public async getRepoBranch() {
         let buf = Buffer.alloc(64);
         checkForError(this.lib,this.lib.asphodel_get_repo_branch_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
+/**
+Return the repository name of the device's firmware (UTF-8).
 
+ * @returns 
+ */
     public async getRepoName() {
         let buf = Buffer.alloc(64);
         checkForError(this.lib,this.lib.asphodel_get_repo_name_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
-
+/**
+Return the chip family of the device's processor (e.g. "XMega") in string form (UTF-8).
+ * 
+ */
     public async getChipFamily() {
         let buf = Buffer.alloc(64);
         checkForError(this.lib,this.lib.asphodel_get_chip_family_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
+/**
+Return the chip model of the device's processor (e.g. "ATxmega256A3U") in string form (UTF-8).
 
+ * @returns 
+ */
     public async getChipModel() {
         let buf = Buffer.alloc(64);
         checkForError(this.lib,this.lib.asphodel_get_chip_model_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
+/**
+Return the chip ID of the processor in string form (UTF-8).
 
+ * @returns 
+ */
     public async getChipID() {
         let buf = Buffer.alloc(64);
         checkForError(this.lib,this.lib.asphodel_get_chip_id_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
+/**
+Return the size of the NVM region in bytes.
 
+ * @returns 
+ */
     public async getNVMSize() {
         let ptr = ref.alloc(ffi.types.size_t);
         checkForError(this.lib,this.lib.asphodel_get_nvm_size_blocking(this.inner, ptr));
         return ptr.deref()
     }
+/**
+Erase the NVM region.
 
+ */
     public async eraseNVM() {
         checkForError(this.lib,this.lib.asphodel_erase_nvm_blocking(this.inner))
     }
+/**
+Write bytes to the NVM region. The start_address is given in bytes, and must be a multiple of 4.
+The length of the data must be a multiple of 4 and must be at most 2 less than the device's maximum outgoing
+parameter length. See write_nvm_section for a more user friendly function.
 
+ * @param buff 
+ * @param start_address 
+ */
     public async writeNVMRaw(buff: Uint8Array, start_address: number) {
         let b = Buffer.from(buff);
         checkForError(this.lib,this.lib.asphodel_write_nvm_raw_blocking(this.inner, start_address, b, b.length))
     }
 
-
+/**
+Write bytes to the NVM region. The start_address is given in bytes, and must be a multiple of 4.
+The length of the data must be a multiple of 4.
+ * @param buff 
+ * @param start_address 
+ */
     public async writeNVMSection(buff: Uint8Array, start_address: number) {
         let b = Buffer.from(buff);
         checkForError(this.lib,this.lib.asphodel_write_nvm_section_blocking(this.inner, start_address, b, b.length))
     }
 
+/**
 
+Read bytes from the NVM region. The start_address is given in bytes, and must be a multiple of 4.
+The number of bytes read is controlled by the device. The length parameter specifies the maximum number of bytes to
+write into data. See asphodel_read_nvm_section for a more user friendly function.
+
+ * @param start_address 
+ * @param len 
+ * @returns 
+ */
     public async readNVmRaw(start_address: number, len: number) {
         let b = Buffer.alloc(len);
         let lenptr = ref.alloc(ref.types.size_t, len);
@@ -2469,7 +2631,14 @@ export class DeviceWrapper {
         b.copy(ubuf);
         return ubuf;
     }
+/**
+Read a number of bytes from a specific section of the NVM region. The start_address is given in bytes, and must be
+a multiple of 4. Will read exactly 'length' number of bytes into data.
 
+ * @param start_address 
+ * @param len 
+ * @returns 
+ */
     public async readNVMSection(start_address: number, len: number) {
         let b = Buffer.alloc(len);
         checkForError(this.lib,this.lib.asphodel_read_nvm_section_blocking(this.inner, start_address, b, len))
@@ -2477,18 +2646,37 @@ export class DeviceWrapper {
         b.copy(ubuf);
         return ubuf;
     }
-
+/**
+Read a string from a user tag location. Offset and length are in bytes, and must be a multiple of 4 (guaranteed if
+they came from the get_user_tag_locations). Buffer will be written with a null-terminated UTF-8 string. Up to
+length+1 bytes will be written to the buffer.
+ * @param offset 
+ * @param length 
+ * @returns 
+ */
     public async readUserTagString(offset: number, length: number) {
         let buf = Buffer.alloc(length + 5);
         checkForError(this.lib,this.lib.asphodel_read_user_tag_string_blocking(this.inner, offset, length, buf));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
+/**
 
+Write a string to a user tag location. Erases and rewrites the NVM. Offset and length are in bytes, and must be a
+multiple of 4 (guaranteed if they came from the get_user_tag_locations). Buffer should be a null-terminated UTF-8
+string. Additional bytes in the location will be filled with zeros.
+ * @param buffer 
+ * @param offset 
+ * @param size 
+ */
     public async writeUserTagString(buffer: string, offset: number, size: number) {
         let b = Buffer.from(buffer);
         checkForError(this.lib,this.lib.asphodel_write_user_tag_string_blocking(this.inner, offset, size, b))
     }
-
+/**
+The returned modified value is true (1) when the device NVM has been modified since its last reset. This can
+indicate that the device is using a stale configuration, different from what the device settings might indicate.
+ * @returns 
+ */
     public async getNVMModified() {
         let ptr = ref.alloc("uint8")
         checkForError(this.lib,this.lib.asphodel_get_nvm_modified_blocking(this.inner, ptr));
@@ -2496,53 +2684,93 @@ export class DeviceWrapper {
     }
 
 
-
+/**
+Return the hash of the NVM region data in string form (UTF-8). Intended for use in determining when cached NVM data
+is valid when reconnecting to a device.
+ * @returns 
+ */
     public async getNVMHash() {
         let buf = Buffer.alloc(128);
         checkForError(this.lib,this.lib.asphodel_get_nvm_hash_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
-
+/**
+Return the hash of the current device settings in string form (UTF-8). Intended for use in determining when cached
+device information (streams, etc) is valid when reconnecting to a device.
+ * @returns 
+ */
     public async getSettingHash() {
         let buf = Buffer.alloc(128);
         checkForError(this.lib,this.lib.asphodel_get_nvm_hash_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
-
+/**
+Performs a "soft" reset. Flushes any device side communication and disables any enabled streams.
+ * 
+ */
     public async flush() {
         checkForError(this.lib,this.lib.asphodel_flush_blocking(this.inner));
     }
-
+/**
+Reset the device.
+ * 
+ */
     public async reset() {
         checkForError(this.lib,this.lib.asphodel_reset_blocking(this.inner));
     }
+/**
+Return the bootloader info string for the device (e.g. "XMega AES") in string form (UTF-8).
 
+ * @returns 
+ */
     public async getBootloaderInfo() {
         let buf = Buffer.alloc(128);
         checkForError(this.lib,this.lib.asphodel_get_bootloader_info_blocking(this.inner, buf, buf.length));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
-
+/**
+Reset the device and start the device's bootloader.
+ * 
+ */
     public async bootloaderJump() {
         checkForError(this.lib,this.lib.asphodel_bootloader_jump_blocking(this.inner));
     }
+/**
 
+Flag returned is 1 if the device has been reset since the last time the reset flag has been cleared. Otherwise the
+flag is 0. See also asphodel_clear_reset_flag. The combination of these two functions can be used to verify that a
+device has actually reset, since the reset command itself does not give feedback due to the device disconnecting
+during the command.
+ * @returns 
+ */
     public async getResetFlag() {
         let ptr = ref.alloc("uint8")
         checkForError(this.lib,this.lib.asphodel_get_reset_flag_blocking(this.inner, ptr));
         return ptr.deref();
     }
-
+/**
+Will clear the reset flag on the device. See asphodel_get_reset_flag for usage details.
+ * 
+ */
     public async clearResetFlag() {
         checkForError(this.lib,this.lib.asphodel_clear_reset_flag_blocking(this.inner));
     }
-
+/**
+Return the number of RGB LEDs present.
+ * 
+ * @returns 
+ */
     public async getRGBCount() {
         let ptr = ref.alloc("int")
         checkForError(this.lib,this.lib.asphodel_get_rgb_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
-
+/**
+Return the present setting of a specific RGB LED.
+values must be a length 3 array.
+ * @param index 
+ * @returns 
+ */
     public async getRGBValues(index: number) {
         let buf = Buffer.alloc(3);
         checkForError(this.lib,this.lib.asphodel_get_rgb_values_blocking(this.inner, index, buf));
@@ -2550,7 +2778,14 @@ export class DeviceWrapper {
             r: buf.at(0), g: buf.at(1), b: buf.at(2)
         }
     }
+/**
+Set the value of a specific RGB LED.
+values must be a length 3 array. The instant parameter is a boolean (0/1).
 
+ * @param index 
+ * @param values 
+ * @param instant 
+ */
     public async setRGBValues(index: number, values: { r: number, g: number, b: number }, instant: boolean) {
         let buf = Buffer.alloc(3);
         buf[0] = values.r;
@@ -2558,148 +2793,285 @@ export class DeviceWrapper {
         buf[2] = values.b;
         checkForError(this.lib,this.lib.asphodel_set_rgb_values_blocking(this.inner, index, buf, instant ? 1 : 0));
     }
-
+/**
+Set the value of a specific RGB LED. Convenience function for specifying colors in hex.
+The instant parameter is a boolean (0/1).
+ * @param index 
+ * @param values 
+ * @param instant 
+ */
     public async setRGBValuesHex(index: number, values: number, instant: boolean) {
         checkForError(this.lib,this.lib.asphodel_set_rgb_values_hex_blocking(this.inner, index, values, instant ? 1 : 0));
     }
 
+/**
+Return the number of stand-alone (not RGB) LEDs present.
+ 
+ * @returns 
+ */
     public async getLEDCount() {
         let ptr = ref.alloc("int")
         checkForError(this.lib,this.lib.asphodel_get_led_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
+/**
+Return the present setting of the specific LED.
 
+ * @param index 
+ * @returns 
+ */
     public async getLEDValue(index: number) {
         let ptr = ref.alloc("uint8");
         checkForError(this.lib,this.lib.asphodel_get_led_value_blocking(this.inner, index, ptr));
         return ptr.deref()
     }
+/**
+Set the value of a specific LED. The instant parameter is a boolean (0/1).
 
+ * @param index 
+ * @param value 
+ * @param instant 
+ */
     public async setLEDValue(index: number, value: number, instant: boolean) {
         checkForError(this.lib,this.lib.asphodel_set_led_value_blocking(this.inner, index, value, instant ? 1 : 0));
     }
-
+/**
+Set the mode of the device to a specific value.
+ * @param mode 
+ */
     public async setMode(mode: number) {
         checkForError(this.lib,this.lib.asphodel_set_device_mode_blocking(this.inner, mode));
     }
+/**
+Return the present setting of the device mode.
 
+ * @param index 
+ * @returns 
+ */
     public async getMode(index: number) {
         let ptr = ref.alloc("uint8");
         checkForError(this.lib,this.lib.asphodel_get_device_mode_blocking(this.inner, ptr));
         return ptr.deref()
     }
-
+/**
+Return the number of settings present.
+ * 
+ * @returns 
+ */
     public async getSettingCount() {
         let ptr = ref.alloc("int");
         checkForError(this.lib,this.lib.asphodel_get_setting_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
+/**
 
+Return the name of a specific setting in string form (UTF-8). The length parameter should hold the maximum number of
+bytes to write into buffer. Upon completion, the length parameter will hold the length of the setting name not
+including the null terminator. The length parameter may be set larger than its initial value if the buffer was not
+big enough to hold the entire setting name. 
+ * @param index 
+ * @returns 
+ */
     public async getSettingName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_setting_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
-
+/**
+Fill an array with the default bytes for the specified setting. The length parameter should hold the maximum number
+of bytes to write into the array. When the command is finished, the length parameter will hold the size of the
+default bytes (as opposed to the number of bytes actually written to the array).
+ * @param index 
+ * @param length 
+ * @returns 
+ */
     public async getSettingDefault(index: number, length:number) {
         let buf = Buffer.alloc(length);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_setting_default_blocking(this.inner, index, buf, ptr))
-        let ubuf = new Uint8Array(ptr.deref());
-        buf.copy(ubuf, 0, 0, ptr.deref())
-        return ubuf
+        let ubuf = new Uint8Array(length);
+        buf.copy(ubuf)
+        return {
+            defaults: ubuf,
+            size: ptr.deref()
+        }
     }
+/**
+Return the number of elements for each custom enumeration on the device. The length parameter should hold the
+maximum number of counts to write into the array. When the command is finished it will hold the number of custom
+enumerations present on the device (as opposed to the number of counts actually written to the array).
 
+ * @param length 
+ * @returns 
+ */
     public async getCustomEnumCounts(length:number) {
         let buf = Buffer.alloc(length);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_custom_enum_counts_blocking(this.inner, buf, ptr))
-        let ubuf = new Uint8Array(ptr.deref());
-        buf.copy(ubuf, 0, 0, ptr.deref())
-        return ubuf
+        let ubuf = new Uint8Array(length);
+        buf.copy(ubuf)
+        return {res: ubuf, length: ptr.deref()}
     }
 
-
+/**
+Return the name of a specific custom enumeration value in string form (UTF-8). The length parameter should hold the
+maximum number of bytes to write into buffer. Upon completion, the length parameter will hold the length of the
+custom enumeration value name not including the null terminator. The length parameter may be set larger than its
+initial value if the buffer was not big enough to hold the entire channel name.
+ * @param index 
+ * @param value 
+ * @returns 
+ */
     public async getCustomEnumValueName(index: number, value: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_custom_enum_value_name_blocking(this.inner, index, value, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
+/**
+Return the number of setting categories present.
 
+ * @returns 
+ */
     public async getSettingCategoryCount() {
         let ptr = ref.alloc("int");
         checkForError(this.lib,this.lib.asphodel_get_setting_category_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
+/**
+Return the name of a specific setting category in string form (UTF-8). The length parameter should hold the maximum
+number of bytes to write into buffer. Upon completion, the length parameter will hold the length of the setting
+category name not including the null terminator. The length parameter may be set larger than its initial value if
+the buffer was not big enough to hold the entire setting category name.
 
+ * @param index 
+ * @returns 
+ */
     public async getSettingCategoryName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_setting_category_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, ptr.deref());
     }
-
+/**
+Return the setting indexes for a specific setting category. The length parameter should hold the maximum number of
+indexes to write into the array. When the command is finished it will hold the number of settings present on the
+setting category (as opposed to the number of indexes actually written to the array).
+ * @param index 
+ * @param length 
+ * @returns 
+ */
     public async getSettingCategorySetting(index: number, length:number) {
         let buf = Buffer.alloc(length);
         let ptr = ref.alloc("int", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_setting_category_settings_blocking(this.inner, index, buf, ptr))
-        let ubuf = new Uint8Array(ptr.deref());
-        buf.copy(ubuf, 0, 0, ptr.deref())
-        return ubuf;
+        let ubuf = new Uint8Array(length);
+        buf.copy(ubuf)
+        return {res: ubuf, length: ptr.deref()}
     }
-
+/**
+Write the information for a specific setting into setting_info.
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getSettingInfo(index: number) {
         let ptr = ref.alloc(SettingInfo);
         checkForError(this.lib,this.lib.asphodel_get_setting_info_blocking(this.inner, index, ptr));
         return new SettingInfoWrapper(this.lib, ptr)
     }
-
+/**
+Return the number of GPIO ports present.
+ * 
+ * @returns 
+ */
     public async getGPIOPortCount() {
         let ptr = ref.alloc("int");
         checkForError(this.lib,this.lib.asphodel_get_gpio_port_count_blocking(this.inner, ptr));
         return ptr.deref();
     }
-
+/**
+Return the name of a specific GPIO port in string form (UTF-8). The length parameter should hold the maximum number
+of bytes to write into buffer. Upon completion, the length parameter will hold the length of the GPIO port name not
+including the null terminator. The length parameter may be set larger than its initial value if the buffer was not
+big enough to hold the entire GPIO port name.
+ * @param index 
+ * @returns 
+ */
     public async getGPIOPortName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_gpio_port_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
-
+/**
+Write the information for a specific GPIO port into gpio_port_info.
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getGPIOPortInfo(index: number) {
         let ptr = ref.alloc(GPIOPortInfo);
         checkForError(this.lib,this.lib.asphodel_get_gpio_port_info_blocking(this.inner, index, ptr));
         return new GPIOPortinfoWrapper(this.lib, ptr)
     }
-
+/**
+Get the pin values of a specific GPIO port.
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getGPIOPortValues(index: number) {
         let ptr = ref.alloc("uint32");
         checkForError(this.lib,this.lib.asphodel_get_gpio_port_values_blocking(this.inner, index, ptr));
         return ptr.deref()
     }
-
+/**
+Set the pin mode for a set of pins on a specific GPIO port.
+ * 
+ * @param index 
+ * @param mode 
+ * @param pins 
+ */
     public async setGPIOPortMode(index: number, mode: number, pins: number) {
         checkForError(this.lib,this.lib.asphodel_set_gpio_port_modes_blocking(this.inner, index, mode, pins));
     }
-
+/**
+Disable hardware overrides on all GPIO pins. Only a device reset can restore the device to normal operations.
+ * 
+ */
     public async disableGPIOOverrides() {
         checkForError(this.lib,this.lib.asphodel_disable_gpio_overrides_blocking(this.inner));
     }
-
+/**
+Return the number of SPI and I2C busses present.
+ * 
+ * @returns 
+ */
     public async getBusCounts() {
         let spi = ref.alloc("int");
         let i2c = ref.alloc("int");
         checkForError(this.lib,this.lib.asphodel_get_bus_counts_blocking(this.inner, spi, i2c))
         return { spi: spi.deref(), i2c: i2c.deref() }
     }
-
+/**
+Set the CS mode for a specific SPI bus.
+ * 
+ * @param index 
+ * @param cs_mode 
+ */
     public async setSpiCsMode(index: number, cs_mode: number) {
         checkForError(this.lib,this.lib.asphodel_set_spi_cs_mode_blocking(this.inner, index, cs_mode))
     }
-
+/**
+Does a transfer on the specified SPI bus. The TX data is transmitted. The RX data buffer must be at least as long
+as the transmission length.
+ * @param index 
+ * @param tx_data 
+ * @param data_length 
+ * @returns 
+ */
     public async doSpiTransfer(index: number, tx_data: Uint8Array, data_length: number) {
         let txbuf = Buffer.from(tx_data);
         let rxbuf = Buffer.alloc(data_length);
@@ -2708,12 +3080,25 @@ export class DeviceWrapper {
         rxbuf.copy(ubuf);
         return ubuf
     }
-
+/**
+Does a write to the given 7-bit address on the specified I2C bus.
+ * 
+ * @param index 
+ * @param addr 
+ * @param tx_data 
+ */
     public async doI2cWrite(index: number, addr: number, tx_data: Uint8Array) {
         let txbuf = Buffer.from(tx_data);
         checkForError(this.lib,this.lib.asphodel_do_i2c_write_blocking(this.inner, index, addr, txbuf, txbuf.length))
     }
-
+/**
+Does a read from the given 7-bit address on the specified I2C bus.
+ * 
+ * @param index 
+ * @param addr 
+ * @param read_length 
+ * @returns 
+ */
     public async doI2cRead(index: number, addr: number, read_length: number) {
         let txbuf = Buffer.alloc(read_length);
         checkForError(this.lib,this.lib.asphodel_do_i2c_read_blocking(this.inner, index, addr, txbuf, txbuf.length))
@@ -2721,7 +3106,14 @@ export class DeviceWrapper {
         txbuf.copy(ubuf)
         return ubuf
     }
-
+/**
+Does a write, then a read from the given 7-bit address on the specified I2C bus.
+ * 
+ * @param index 
+ * @param addr 
+ * @param read_length 
+ * @returns 
+ */
     public async doI2cWriteRead(index: number, addr: number, txdata: Uint8Array, read_length: number) {
         let rxbuf = Buffer.alloc(read_length);
         let txbuf = Buffer.from(txdata)
@@ -2730,42 +3122,88 @@ export class DeviceWrapper {
         rxbuf.copy(ubuf)
         return ubuf
     }
-
+/**
+Do a fixed channel test with the radio hardware. For testing purposes only.
+ * 
+ * @param channel 
+ * @param duration 
+ * @param mode 
+ */
     public async doRadioFixedTest(channel: number, duration: number, mode: number) {
         checkForError(this.lib,this.lib.asphodel_do_radio_fixed_test_blocking(this.inner, channel, duration, mode))
     }
+/**
+Do a sweep test with the radio hardware. For testing purposes only.
 
+ * @param start_channel 
+ * @param stop_channel 
+ * @param hop_interval 
+ * @param hop_count 
+ * @param mode 
+ */
     public async doRadioSweepTest(start_channel: number, stop_channel: number, hop_interval: number, hop_count: number, mode: number) {
         checkForError(this.lib,this.lib.asphodel_do_radio_sweep_test_blocking(this.inner, start_channel, stop_channel, hop_interval, hop_count, mode))
     }
+/**
+Return the number of info regions present. For testing purposes only.
 
+ * @returns 
+ */
     public async getInfoRegionCount() {
         let ptr = ref.alloc("int");
         checkForError(this.lib,this.lib.asphodel_get_info_region_count_blocking(this.inner, ptr));
         return ptr.deref()
     }
+/**
+Return the name of a specific info region in string form (UTF-8). The length parameter should hold the maximum number
+of bytes to write into buffer. Upon completion, the length parameter will hold the length of the info region name not
+including the null terminator. The length parameter may be set larger than its initial value if the buffer was not
+big enough to hold the entire info region name. For testing purposes only.
 
+ * @param index 
+ * @returns 
+ */
     public async getInfoRegionName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_info_region_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, ptr.deref());
     }
+/**
+Reads data from a specific info region. The length parameter should hold the maximum number of bytes to write into
+the array. When the command is finished it will hold the number of bytes present in the info region (as opposed to
+the number of bytes actually written to the array). For testing purposes only.
 
-    public async getInfoRegion(index: number) {
-        let buf = Buffer.alloc(128);
+ * @param index 
+ * @returns 
+ */
+    public async getInfoRegion(index: number, length:number) {
+        let buf = Buffer.alloc(length);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_info_region_blocking(this.inner, index, buf, ptr));
-        let ubuf = new Uint8Array(ptr.deref())
-        return buf.copy(ubuf, 0, 0, ptr.deref())
+        let ubuf = new Uint8Array(length)
+        buf.copy(ubuf, 0, 0, length)
+        return {
+            info_region: ubuf,
+            nbytes: ptr.deref()
+        }
     }
-
+/**
+Get stack info. stack_info should point to an array of size 2. stack_info[0] is free bytes. stack_info[1] is used
+bytes. For testing purposes only.
+ * @returns 
+ */
     public async getStackInfo() {
         let buf = Buffer.alloc(2 * 4);
         checkForError(this.lib,this.lib.asphodel_get_stack_info_blocking(this.inner, buf));
         return { free: buf.readInt32LE(0), used: buf.readInt32LE(4) }
     }
-
+/**
+Echo raw bytes. For testing purposes only.
+ * 
+ * @param data 
+ * @returns 
+ */
     public async echoRaw(data: Uint8Array) {
         let rxbuf = Buffer.alloc(data.length);
         let txbuf = Buffer.from(data)
@@ -2775,7 +3213,12 @@ export class DeviceWrapper {
         rxbuf.copy(ubuf)
         return ubuf
     }
-
+/**
+Echo bytes as transaction. For testing purposes only.
+ * 
+ * @param data 
+ * @returns 
+ */
     public async echoTransaction(data: Uint8Array) {
         let rxbuf = Buffer.alloc(data.length);
         let txbuf = Buffer.from(data)
@@ -2785,7 +3228,11 @@ export class DeviceWrapper {
         rxbuf.copy(ubuf)
         return ubuf
     }
-
+/**
+Echo parameters. For testing purposes only.
+ * @param data 
+ * @returns 
+ */
     public async echoParams(data: Uint8Array) {
         let rxbuf = Buffer.alloc(data.length);
         let txbuf = Buffer.from(data)
@@ -2795,7 +3242,11 @@ export class DeviceWrapper {
         rxbuf.copy(ubuf)
         return ubuf
     }
-
+/**
+Return the number of streams present and ID size information
+ * 
+ * @returns 
+ */
     public async getStreamCount() {
         let fil = ref.alloc("uint8", 0)
         let id = ref.alloc("uint8", 0)
@@ -2807,13 +3258,27 @@ export class DeviceWrapper {
             filler_bits: fil.deref()
         }
     }
-
+/**
+ * 
+Allocate and fill a AsphodelStreamInfo_t structure. Must be freed with asphodel_free_stream() when finished.
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getStream(index: number) {
         let st = ref.alloc(ref.refType(StreamInfo));
         checkForError(this.lib,this.lib.asphodel_get_stream_blocking(this.inner, index, st))
         return new StreamInfoWrapper(this.lib, st.deref())
     }
+/**
+ * Return the channel indexes for a specific stream. The length parameter should hold the maximum number of indexes to
+write into the array. When the command is finished it will hold the number of channels present on the stream (as
+opposed to the number of indexes actually written to the array).
 
+ * @param index 
+ * @param len 
+ * @returns 
+ */
     public async getStreamChannels(index: number, len: number) {
         let arr = Buffer.alloc(len)
         let lenptr = ref.alloc("uint8", len)
@@ -2825,21 +3290,41 @@ export class DeviceWrapper {
             number_of_channels: lenptr.deref()
         }
     }
-
+/**
+Write the stream information for a specific stream into stream_info.
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getStreamFormat(index: number) {
         let st = ref.alloc(StreamInfo);
         checkForError(this.lib,this.lib.asphodel_get_stream_format_blocking(this.inner, index, st))
         return new StreamInfoWrapper(this.lib, st)
     }
-
+/**
+Enable or disable a specific stream. The enable parameter is a boolean (0/1).
+ * 
+ * @param index 
+ * @param enable 
+ */
     public async enableStream(index: number, enable: boolean) {
         checkForError(this.lib,this.lib.asphodel_enable_stream_blocking(this.inner, index, enable ? 1 : 0))
     }
-
+/**
+ Enable or disable a specific stream's warm up function. The enable parameter is a boolean (0/1).
+ * 
+ * @param index 
+ * @param enable 
+ */
     public async warmUpStream(index: number, enable: boolean) {
         checkForError(this.lib,this.lib.asphodel_warm_up_stream_blocking(this.inner, index, enable ? 1 : 0))
     }
-
+/**
+Return the enable and warm up status of a specific stream.
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getStreamStatus(index: number) {
         let en = ref.alloc("int");
         let wa = ref.alloc("int");
@@ -2849,7 +3334,13 @@ export class DeviceWrapper {
             warm_up: wa.deref()
         }
     }
+/**
+ * Return stream rate channel information. The available parameter is a boolean (0/1). NOTE: if available is zero then
+ the other function outputs have not been written.
 
+ * @param index 
+ * @returns 
+ */
     public async getStreamRateInfo(index: number) {
         let avail = ref.alloc("int")
         let ci = ref.alloc("int", 0)
@@ -2867,32 +3358,62 @@ export class DeviceWrapper {
             offset: off.deref()
         }
     }
-
+/**
+Return the number of channels present.
+ * 
+ * @returns 
+ */
     public async getChannelCount() {
         let count = ref.alloc("int")
         checkForError(this.lib,this.lib.asphodel_get_channel_count_blocking(this.inner, count));
         return count.deref()
     }
-
+/**
+ Allocate and fill a AsphodelChannelInfo_t structure. Must be freed with asphodel_free_channel() when finished.
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getChannel(index: number) {
         let st = ref.alloc(ref.refType(ChannelInfo));
         checkForError(this.lib,this.lib.asphodel_get_channel_blocking(this.inner, index, st))
         return new ChannelInfoWrapper(this.lib, st.deref())
     }
-
+/**
+ * 
+Return the name of a specific channel in string form (UTF-8). The length parameter should hold the maximum number
+of bytes to write into buffer. Upon completion, the length parameter will hold the length of the channel name
+not including the null terminator. The length parameter may be set larger than its initial value if the buffer
+was not big enough to hold the entire channel name.
+ * @param index 
+ * @returns 
+ */
     public async getChannelName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_channel_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, ptr.deref());
     }
-
+/**
+Write the channel information for a specific channel into channel_info.
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getChannelInfo(index: number) {
         let st = ref.alloc(ChannelInfo);
         checkForError(this.lib,this.lib.asphodel_get_channel_info_blocking(this.inner, index, st))
         return new ChannelInfoWrapper(this.lib, st)
     }
+/**
+  Fill an array with the coefficients from the specified channel. The length parameter should hold the maximum number
+of coefficients to write into the array. When the command is finished it will hold the number of coefficients
+present on the channel (as opposed to the number of coefficients actually written to the array).
 
+ * @param index 
+ * @param length 
+ * @returns 
+ */
     public async getChannelCoefficients(index: number, length: number) {
         let fbuf = Buffer.alloc(ffi.types.float.size * length);
         let lptr = ref.alloc("uint8", length)
@@ -2906,7 +3427,16 @@ export class DeviceWrapper {
             coeficients_present: lptr.deref()
         }
     }
+/**
+Fill an array with a chunk for the specified channel. The length parameter should hold the maximum number
+of bytes to write into the array. When the command is finished, the length parameter will hold the size of the
+chunk (as opposed to the number of bytes actually written to the array).
 
+ * @param index 
+ * @param chunk_number 
+ * @param length 
+ * @returns 
+ */
     async getChannelChunk(index: number, chunk_number: number, length: number) {
         let chbuff = Buffer.alloc(length);
         let lptr = ref.alloc("uint8", length);
@@ -2918,7 +3448,16 @@ export class DeviceWrapper {
             chunk_size: lptr.deref()
         }
     }
-
+/**
+Performa a channel specific transfer. The format of the data depends on the channel type. The reply_length parameter
+should hold the maximum number of bytes to write into the reply array. When the command is finished, the
+reply_length parameter will hold the size of the recieved reply (as opposed to the number of bytes actually written
+to the reply array). 
+ * @param index 
+ * @param data 
+ * @param reply_len 
+ * @returns 
+ */
     public async channelSpecific(index: number, data: Uint8Array, reply_len:number) {
         let rbuf = Buffer.alloc(reply_len);
         let rlen = ref.alloc("uint8", reply_len);
@@ -2931,7 +3470,12 @@ export class DeviceWrapper {
             received_reply_size: rlen.deref()
         }
     }
-
+/**
+Return channel calibration information. The available parameter is a boolean (0/1). NOTE: if available is zero then
+the calibration structure values have not been written. 
+ * @param index 
+ * @returns 
+ */
     public async getChannelCalibration(index: number) {
         let avail = ref.alloc("int")
         let ptr = ref.alloc(ChannelCallibration);
@@ -2941,26 +3485,48 @@ export class DeviceWrapper {
             callibration: new ChannelCallibrationWrapper(this.lib, ptr)
         }
     }
-
+/**
+Return the number of supplies present.
+ * 
+ * @returns 
+ */
     public async getSupplyCount() {
         let cnt = ref.alloc("int", 0)
         checkForError(this.lib,this.lib.asphodel_get_supply_count_blocking(this.inner, cnt));
         return cnt.deref();
     }
+/**
+ * Return the name of a specific supply in string form (UTF-8). The length parameter should hold the maximum number
+of bytes to write into buffer. Upon completion, the length parameter will hold the length of the supply name not
+including the null terminator. The length parameter may be set larger than its initial value if the buffer was not
+big enough to hold the entire supply name.
 
+ * @param index 
+ * @returns 
+ */
     public async getSupplyName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_supply_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, buf.indexOf(0));
     }
-
+/**
+Write the supply information for a specific supply into supply_info.
+ * 
+ */
     public async getSupplyInfo(index: number) {
         let ptr = ref.alloc(SupplyInfo);
         checkForError(this.lib,this.lib.asphodel_get_supply_info_blocking(this.inner, index, ptr));
         return new SupplyInfoWrapper(this.lib, ptr)
     }
+/**
+ * Perform a measurement on the specified supply. If tries is greater than zero, this will no more than this many
+transfers before returning a status of `ASPHODEL_TOO_MANY_TRIES`. Otherwise, will try indefinitely.
 
+ * @param index 
+ * @param tries 
+ * @returns 
+ */
     public async checkSupply(index: number, tries: number) {
         var m = ref.alloc("uint32");
         var r = ref.alloc("uint8")
@@ -2978,22 +3544,41 @@ export class DeviceWrapper {
             result: r.deref()
         }
     }
-
+/**
+    returns a pointer to the advertisement structure
+ * 
+ * @returns 
+ */
     public TCPGetAdvertisement() {
         let ptr = this.lib.asphodel_tcp_get_advertisement(this.inner);
         return new TcpAdvInfoWrapper(this.lib, ptr)
     }
-
+/**
+Enable or disable the RF power output.
+ * 
+ * @param enable 
+ */
     public async enableRfPower(enable: boolean) {
         checkForError(this.lib,this.lib.asphodel_enable_rf_power_blocking(this.inner, enable ? 1 : 0))
     }
-
+/**
+Retrieve the enabled state of the RF power output.
+ * 
+ * @returns 
+ */
     public async getRfpowerStatus() {
         let st = ref.alloc("int", 0);
         checkForError(this.lib,this.lib.asphodel_get_rf_power_status_blocking(this.inner, st));
         return st.deref()
     }
+/**
+ * Return the control variable indexes that are related to RF power transmission. The length parameter should hold the
+maximum number of indexes to write into the array. When the command is finished it will hold the number of indexes
+reported by the device (as opposed to the number of indexes actually written to the array).
 
+ * @param len 
+ * @returns 
+ */
     public async getRfPowerCtlVars(len: number) {
         let arr = Buffer.alloc(len)
         let lenptr = ref.alloc("uint8", len)
@@ -3005,52 +3590,105 @@ export class DeviceWrapper {
             indexes: lenptr.deref()
         }
     }
+/**
+ * Sets or resets the RF Power timeout. The timeout parameter is specified in milliseconds. If the timeout duration
+passes without the device receiving another timeout reset command, then the device will disable the RF power output
+(if applicable). Sending a timeout value of 0 will disable the timeout functionality.
 
+ * @param timeout 
+ */
     public async resetRfPowerTimeout(timeout: number) {
         checkForError(this.lib,this.lib.asphodel_reset_rf_power_timeout_blocking(this.inner, timeout));
     }
-
+/**
+Start the main program from the bootloader. Implicitly resets the device, like `reset()`.
+ * 
+ */
     public async bootLoaderStartProgram() {
         checkForError(this.lib,this.lib.asphodel_bootloader_start_program_blocking(this.inner))
     }
+/**
+ * Returns page information from the bootloader. The length parameter should hold the maximum number of entries to
+write into the array. When the command is finished it will hold the number of entries available on the device (as
+opposed to the number of entries actually written to the array). Entries are paris of page count and page size, in
+that order. The total number of pages is the sum of all page counts. The total number of bytes is the sum of the
+products of each entry pair (i.e. page count * page size).
 
+ * @param length 
+ * @returns 
+ */
     public async getBootLoaderPageInfo(length: number) {
         let buf = Buffer.alloc(length * 4);
         let l = ref.alloc("uint8", length);
         checkForError(this.lib,this.lib.asphodel_get_bootloader_page_info_blocking(this.inner, buf, l));
-        let ub = new Uint32Array(l.deref());
+        let ub = new Uint32Array(length);
         for (let i = 0; i < ub.length; i++) {
             ub[i] = os.endianness() == "LE" ? buf.readUint32LE(i * ffi.types.float.size) : buf.readUint32BE(i * ffi.types.float.size)
         }
-        return ub
+        return {
+            page_info: ub,
+            entries_available: l.deref()
+        }
     }
-
+/**
+ * Fill an array with the allowed code block sizes for the device. The length parameter should hold the maximum number
+of block sizes to write into the array. When the command is finished it will hold the number of block sizes
+available on the device (as opposed to the number of block sizes actually written to the array).
+The array of code block sizes will be sorted, ascending. There will be no duplicates, and all values will be greater
+than zero.
+ * @param length 
+ * @returns 
+ */
     public async getBootLoaderblockSizes(length: number) {
         let buf = Buffer.alloc(length * 2);
         let l = ref.alloc("uint8", length);
         checkForError(this.lib,this.lib.asphodel_get_bootloader_block_sizes_blocking(this.inner, buf, l));
-        let ub = new Uint16Array(l.deref());
+        let ub = new Uint16Array(length);
         for (let i = 0; i < ub.length; i++) {
             ub[i] = os.endianness() == "LE" ? buf.readUint16LE(i * 2) : buf.readUint16BE(i * 2)
         }
-        return ub
+        return {
+            block_sizes: ub,
+            available: l.deref()
+        }
     }
-
+/**
+ * 
+Prepares a page for writing. Must be called before writing code blocks or verifying pages. The nonce, if any, is
+used by the device to decode the written code blocks.
+ * @param page_number 
+ * @param nonce 
+ */
     public async startBootLoaderPage(page_number: number, nonce: Uint8Array) {
         let buf = Buffer.from(nonce);
         checkForError(this.lib, this.lib.asphodel_start_bootloader_page_blocking(this.inner, page_number, buf, buf.length));
     }
-
+/**
+ * Write a code block to the current page. Code blocks must be sent strictly sequentally. Blocks are only accepted by
+the device in certain sizes. See `getBootloaderBlockSizes()` for allowable code block sizes.
+``NOTE``: after the final code block is written to a page, the page must be finished with a call to
+`finishBootloaderPage()`.
+ * @param data 
+ */
     public async writeBootLoaderCodeBlock(data: Uint8Array) {
         let db = Buffer.from(data);
         checkForError(this.lib,this.lib.asphodel_write_bootloader_code_block_blocking(this.inner, db, db.length));
     }
-
+/**
+ * Must be called after all code blocks for a specific page have been written. The MAC tag is used to verify the
+contents of the page.
+ * @param mac_tag 
+ */
     public async finishBootloaderPage(mac_tag: Uint8Array) {
         let mac = Buffer.from(mac_tag)
         checkForError(this.lib,this.lib.asphodel_finish_bootloader_page_blocking(this.inner, mac, mac.length));
     }
-
+/**
+    Wrapper which calls `writeBootloaderCodeBlock()` repeatedly with valid block sizes.
+ * 
+ * @param data 
+ * @param block_sizes 
+ */
     public async writeBoatloaderPage(data: Uint8Array, block_sizes: Uint16Array) {
         let dbuf = Buffer.from(data);
         let bbuf = Buffer.alloc(block_sizes.length * 2);
@@ -3059,57 +3697,118 @@ export class DeviceWrapper {
         })
         checkForError(this.lib, this.lib.asphodel_write_bootloader_page_blocking(this.inner, dbuf, data.length, bbuf,block_sizes.length))
     }
+/**
+ * Used to verify the contents of a page. The page contents are checked against the MAC tag to verify integrity.
+NOTE: the `startBootloaderPage()` must be called for the page prior to verification.
 
+ * @param mac_tag 
+ */
     public async verifyBootloaderPage(mac_tag: Uint8Array) {
         let mb = Buffer.from(mac_tag);
         checkForError(this.lib,this.lib.asphodel_verify_bootloader_page_blocking(this.inner, mb, mb.length))
     }
-
+/**
+ * Supported types: `CHANNEL_TYPE_SLOW_STRAIN`, `CHANNEL_TYPE_FAST_STRAIN`, `CHANNEL_TYPE_COMPOSITE_STRAIN`
+Sets the output of the sense resistors on a specified strain bridge. The side inputs are booleans (0 or 1).
+Wraps a call to `channelSpecific()`.
+ * @param channel_index 
+ * @param bridge_index 
+ * @param positive_side 
+ * @param negative_side 
+ */
     public async setStrainOutputs(channel_index: number, bridge_index: number, positive_side: number, negative_side: number) {
         checkForError(this.lib,this.lib.asphodel_set_strain_outputs_blocking(this.inner, channel_index, bridge_index, positive_side, negative_side))
     }
-
+/**
+ * Supported types: `CHANNEL_TYPE_SLOW_ACCEL`, `CHANNEL_TYPE_PACKED_ACCEL`, `CHANNEL_TYPE_LINEAR_ACCEL`
+Enables or disables the accel channel's self test functionality. Enable is a boolean (0/1).
+Wraps a call to `channelSpecific()`.
+ * @param channel_index 
+ * @param enable 
+ */
     public async enableAccelSelfTest(channel_index: number, enable: boolean) {
         checkForError(this.lib,this.lib.asphodel_enable_accel_self_test_blocking(this.inner, channel_index, enable ? 1 : 0))
     }
-
+/**
+Return the number of control variables present.
+ * 
+ * @returns 
+ */
     public async getCtrlVarCount() {
         let c = ref.alloc("int");
         checkForError(this.lib,this.lib.asphodel_get_ctrl_var_count_blocking(this.inner, c))
         return c.deref()
     }
+/**
+ * Return the name of a specific control variable in string form (UTF-8). The length parameter should hold the maximum
+number of bytes to write into buffer. Upon completion, the length parameter will hold the length of the control
+variable name not including the null terminator. The length parameter may be set larger than its initial value if
+the buffer was not big enough to hold the entire control variable name.
 
+ * @param index 
+ * @returns 
+ */
     public async getCtrlVarName(index: number) {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_ctrl_var_name_blocking(this.inner, index, buf, ptr));
         return buf.toString("utf-8", 0, ptr.deref());
     }
+/**
+Write the information for a specific control variable into ctrl_var_info.
 
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getCtrlVarInfo(index: number) {
         let ptr = ref.alloc(CtrlVarInfo);
         checkForError(this.lib, this.lib.asphodel_get_ctrl_var_info_blocking(this.inner, index, ptr));
         return new CtrlVarInfoWrapper(this.lib, ptr)
     }
-
+/**
+Get the value of a specific control variable.
+ * 
+ * @param index 
+ * @returns 
+ */
     public async getCtrlVar(index: number) {
         let c = ref.alloc("uint32");
         checkForError(this.lib,this.lib.asphodel_get_ctrl_var_blocking(this.inner, index, c))
         return c.deref()
     }
-
+/**
+Set the value of a specific control variable.
+ * 
+ * @param index 
+ * @param value 
+ */
     public async setCtrlVar(index: number, value: number) {
         checkForError(this.lib,this.lib.asphodel_set_ctrl_var_blocking(this.inner, index, value))
     }
-
+/**
+ Stop the radio. Works on scanning, connected, and connecting radios. Has no effect on already stopped radios.
+ * 
+ */
     public async stopRadio() {
         checkForError(this.lib,this.lib.asphodel_stop_radio_blocking(this.inner))
     }
+/**
+ * Start a scan with the radio. The radio will remain scanning until stopped. Scan results can be retreived using
+`getStartRadioScanResults()`. Starting a scan will remove any old scan results still in the device.
 
+ */
     public startRadioScan() {
         checkForError(this.lib,this.lib.asphodel_start_radio_scan_blocking(this.inner))
     }
 
+/**
+ * 
+ * Query the device for scanned serial numbers. The device will return at most
+`floor(getMaxIncomingParamLength()/4)` serial numbers at a time. Another query should be performed to make
+sure there are no more. `See getRadioScanResults()` for a more user-friendly version
+ * @returns 
+ */
     public async getRawRadioScanResults(length: number) {
         let res = Buffer.alloc(length * 4);
         let lptr = ref.alloc(ffi.types.size_t, length);
@@ -3120,7 +3819,13 @@ export class DeviceWrapper {
         }
         return ub
     }
+/**
+ * Will return query the device for scanned serial numbers until no more are returned. Each array entry will be unique.
+ Entries are unsorted.
 
+ * @param length 
+ * @returns 
+ */
     public async getRadioScanResults(length: number) {
         let res = ref.alloc(ArrayType("uint32"));
         let lptr = ref.alloc(ffi.types.size_t, length);
@@ -3133,7 +3838,14 @@ export class DeviceWrapper {
         this.lib.asphodel_free_radio_scan_results(resbuff)
         return ub
     }
+/**Query the device for scan results. The device will return at most `floor(getMaxIncomingParamLength()/6)`
+results at a time. Another query should be performed to make sure there are no more. See
+`getRadioExtraScanResults()` for a more user-friendly version.
 
+ * 
+ * @param length 
+ * @returns 
+ */
     public async getRawRadioExtraScanResults(length: number) {
         let res = Buffer.alloc(ExtraScanResult.size * length);
         let lptr = ref.alloc(ffi.types.size_t, length);
@@ -3145,6 +3857,13 @@ export class DeviceWrapper {
         return results
     }
 
+/**
+ * Will query the device for scan results until no more are returned. Each array entry will have a unique serial
+number. Entries are unsorted.
+
+ * @param length 
+ * @returns 
+ */
     public async getRadioExtraScanResults(length: number) {
         let res = ref.alloc(ArrayType(ExtraScanResult));
         let lptr = ref.alloc(ffi.types.size_t, length);
@@ -3157,7 +3876,15 @@ export class DeviceWrapper {
         this.lib.asphodel_free_radio_extra_scan_results(resbuff)
         return results
     }
+/**
+ *  Will return the received radio power during the scan for the specified serial numbers. A power reading of `0x7F` means
+there was no information for that serial number. The array length must be less than or equal to the smaller of
+`(max_outgoing_param_length / 4)` and `(max_incoming_param_len / 1)`.
 
+ * 
+ * @param serials 
+ * @returns 
+ */
     public async getRadioScanPower(serials: Uint32Array) {
         let sb = Buffer.alloc(4 * serials.length);
         serials.forEach((s, i)=>{
@@ -3169,11 +3896,23 @@ export class DeviceWrapper {
         res.copy(ub);
         return ub
     }
+/**
+ * Connect the radio's remote to a specific serial number.
 
+ * @param serial_number 
+ */
     public async connectRadio(serial_number: number) {
         checkForError(this.lib,this.lib.asphodel_connect_radio_blocking(this.inner, serial_number))
     }
+/**
+ * Retrieve the current state of the radio. The state of the radio can be determined from the return values as follows:
+Radio Stopped: connected=0, serial_number=0, protocol_type=0, scanning=0
+Radio Scanning: connected=0, serial_number=0, protocol_type=0, scanning=1
+Radio Connecting: connected=0, serial_number=<sn>, protocol_type=0, scanning=0
+Radio Connected: connected=1, serial_number=<sn>, protocol_type=<type>, scanning=0
 
+ * @returns 
+ */
     public async getRadioStatus() {
         let con = ref.alloc("int");
         let ser = ref.alloc("uint32");
@@ -3187,39 +3926,75 @@ export class DeviceWrapper {
             scanning: scan.deref()
         }
     }
+/**
+ * Return the control variable indexes that are related to radio operation. The length parameter should hold the
+maximum number of indexes to write into the array. When the command is finished it will hold the number of indexes
+reported by the device (as opposed to the number of indexes actually written to the array).
 
+ * @param len 
+ * @returns 
+ */
     public async getRadioCtlVars(len: number) {
         let arr = Buffer.alloc(len)
         let lenptr = ref.alloc("uint8", len)
         checkForError(this.lib,this.lib.asphodel_get_radio_ctrl_vars_blocking(this.inner, arr, lenptr));
         let iarr = new Uint8Array(len);
         arr.copy(iarr);
-        return iarr
+        return {
+            vars: iarr,
+            indexes_reported: lenptr.deref()
+        }
     }
+/**
+ * Return the default serial number configured for use with the radio. A default serial number of 0 means no serial
+number has been set as the default, or the functionality has been disabled.
 
+ * @returns 
+ */
     public async getRadioDefaultSerial() {
         let ser = ref.alloc("uint32");
         checkForError(this.lib,this.lib.asphodel_get_radio_default_serial_blocking(this.inner, ser));
         return ser.deref();
     }
+/**
+ * 
+Start a bootloader scan with the radio. The radio will remain scanning until stopped. Scan results can be retreived
+using `getStartRadioScanResults()`. Starting a scan will remove any old scan results still in the device.
 
+ */
     public startRadioScanBoot() {
         checkForError(this.lib,this.lib.asphodel_start_radio_scan_boot_blocking(this.inner))
     }
 
+    /**
+Connect the radio's remote to a specific serial number, in bootloader mode.
+     * 
+     * @param serial_number 
+     */
     public startConnectRadioBoot(serial_number: number) {
         checkForError(this.lib,this.lib.asphodel_connect_radio_boot_blocking(this.inner, serial_number))
     }
-
+/**
+Stop the remote's radio. Has no effect on already stopped radios.
+ * 
+ */
     public stopRemote() {
         checkForError(this.lib,this.lib.asphodel_stop_remote(this.inner))
     }
 
-
+/**
+Restarts the remote's radio, with the previously connected serial number.
+ * 
+ */
     public restartRemote() {
         checkForError(this.lib,this.lib.asphodel_restart_remote_blocking(this.inner))
     }
+/**
+ * Return the remote's status. Will provide the serial number of the currently connected (or last connected) device.
+If no serial number has ever been used with the device, the serial number will be 0.
 
+ * @returns 
+ */
     public async getRemoteStatus() {
         let con = ref.alloc("int");
         let ser = ref.alloc("uint32");
@@ -3232,124 +4007,47 @@ export class DeviceWrapper {
         }
     }
 
+/**
+Restarts the remote's radio, with the previously connected serial number. Forces the use of application mode.
+ * 
+ */
     public restartRemoteApp() {
         checkForError(this.lib,this.lib.asphodel_restart_remote_app_blocking(this.inner))
     }
-
+/**
+Restarts the remote's radio, with the previously connected serial number. Forces the use of bootloader mode.
+ * 
+ */
     public restartRemoteBoot() {
         checkForError(this.lib,this.lib.asphodel_restart_remote_boot_blocking(this.inner))
     }
-
+/** returns `true` if the device supports RF power commands (in asphodel_rf_power.h), otherwise returns `false`
+*/
     public supportsRfPowerCommands() {
-        return this.lib.asphodel_supports_rf_power_commands(this.inner)
+        return this.lib.asphodel_supports_rf_power_commands(this.inner) == 1
     }
-
+/**  returns `true` if the device supports radio commands (in asphodel_radio.h), otherwise returns `false`
+*/
     public supportsRadioCommands() {
-        return this.lib.asphodel_supports_radio_commands(this.inner)
+        return this.lib.asphodel_supports_radio_commands(this.inner) == 1
     }
-
+/**
+returns `true` if the device supports remote commands (in asphodel_radio.h), otherwise returns `false`
+ * 
+ */
     public supportsRemoteCommands() {
-        return this.lib.asphodel_supports_remote_commands(this.inner)
+        return this.lib.asphodel_supports_remote_commands(this.inner) == 1
     }
-
+/** 
+returns `true` if the device supports bootloader commands (in asphodel_bootloader.h), otherwise returns `false`
+ * 
+*/
     public supportsBootloaderCommands() {
-        return this.lib.asphodel_supports_bootloader_commands(this.inner)
+        return this.lib.asphodel_supports_bootloader_commands(this.inner) == 1
     }
 
 }
 
-//const example = ffi.Library("./example.so", {
-//    //'hello_world': ["void", ["string"]],  // Function with no arguments and void return type
-//    //'add_numbers': ['int', ['int', 'int']]  // Function that takes two ints and returns an int
-//    'getDevice': [ref.refType(Device), []],
-//    "asphodel_get_user_tag_locations_blocking": ["int", [DevicePtr, "void*"]],
-//    "asphodel_get_build_info_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
-//    "asphodel_read_nvm_section_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t]],
-//    "asphodel_usb_find_devices": ["int", ["void*", ref.refType(ffi.types.size_t)]],
-//    "asphodel_tcp_create_device": ["int", ["uint8*", "uint16", "int", "uint8*", ref.refType(DevicePtr)]],
-//    //"getSettingInfo": [ref.refType(SettingInfo), []],
-//    "getChanInfo": [ref.refType(ChannelInfo), []],
-//    "recvCI": ["void", [ArrayType(ChannelInfo)]],
-//
-//    "getDec": [ref.refType(ChannelDecoder), []],
-//    "getSD": [ref.refType(StreamDecoder), []],
-//    "getDD": [ref.refType(DeviceDecoder), []],
-//
-//
-//    "getSI": [ref.refType(StreamInfo), []],
-//
-//    "triggerCb": ["void", [ref.refType(ChannelDecoder)]],
-//    "asphodel_create_channel_decoder": ["int", [ChannelInfoPtr, "uint16", ref.refType(ChannelDecoderPtr)]],
-//
-//
-//    "asphodel_check_accel_self_test": ["int", [ChannelInfoPtr, "double*", "double*", "int*"]],
-//    "asphodel_get_raw_radio_scan_results_blocking": ["int", ["void*", ArrayType("uint32"), ref.refType(ffi.types.size_t)]],
-//    "asphodel_get_radio_scan_results_blocking": ["int", [DevicePtr, "uint32*", ref.refType(ffi.types.size_t)]],
-//
-//    "asphodel_free_radio_scan_results": ["int", ["uint32*"]],
-//    "asphodel_get_radio_scan_power_blocking": ["int", [DevicePtr, "uint32*", "uint8*", ffi.types.size_t]],
-//
-//
-//});
-//
-//let d = example.getDevice();
-//
-//
-//let dev = new DeviceWrapper(example, d);
-//
-//
-//
-//console.log(dev.getRadioScanPower(new Uint32Array([1,2,3,4,5])))
-
-//let d = new DeviceWrapper();
-
-//console.log(Date.now())
-//d.TCPGetAdvertisement()
-//console.log(Date.now())
-
-//let info = d.echoRaw(new Uint8Array([1,2,3,4])).then((res)=> {
-//    console.log(res)
-//})
-
-
-//d.open()
-//d.close()
-//d.free()
-
-//let remote = d.getRemoteDevice()
-
-//let s=  remote.getStreamPackets(64, 0)
-
-//console.log(s);
-
-//d.errorCallback((dev, status)=>{
-//    console.log("Error callback called..",status)
-//})
-
-//d.close();
-
-//d.setConnectCallBack((a, b)=>{
-//    console.log("connect callback: ", a, b)
-//})
-
-//console.log(d.readNVMSection(0, 3))
-
-//d.doTransferReset(0, [1, 2, 3], (status, params) => {
-//    console.log(params)
-//})
-
-//d.stopStreamingPackets();
-
-
-
-//d.startStreamingPackets(0, 0, 0, (status, data, packet_count, packet_size)=> {
-//    console.log("tranfer succesfull...", data)
-//})
-
-
-//for(var i =0; ;i++) {
-//    console.log(`${i}`, d.close())
-//}
 
 export class Version {
     lib: any
@@ -3623,6 +4321,8 @@ class TCP {
 export {
     USB, TCP
 }
+
+
 //
 //
 //
