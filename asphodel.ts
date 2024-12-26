@@ -4243,9 +4243,7 @@ class USB {
     /** initialize the USB portion of the library. MUST be called before asphodel_usb_find_devices()**/
     constructor(lib: any) {
         this.lib = lib;
-        if (this.lib.asphodel_usb_init() != 0) {
-            throw new Error("failed to init usb")
-        }
+        checkForError(this.lib, (this.lib.asphodel_usb_init()))
     }
 
     /** close down the USB portion of the library. asphodel_usb_init() can be called afterwards, if needed later.
@@ -4268,9 +4266,7 @@ class USB {
     function is provided for code readability when polling multiple devices. */
 
     public poll(milliseconds: number) {
-        if (this.lib.asphodel_usb_poll_devices(milliseconds) != 0) {
-            throw new Error("Failed to poll usb devices")
-        }
+        checkForError(this.lib, (this.lib.asphodel_usb_poll_devices(milliseconds)))
     }
 
     /** Return the version string for the running version of the usb backend (libusb-1.0 in current implementations)
@@ -4334,25 +4330,16 @@ class TCP {
         return this.lib.asphodel_tcp_devices_supported() == 1? true: false
     }
 
-    public findDevices(n: number) {
+    public async findDevices(n: number) {
         let list = Buffer.alloc(n * DevicePtr.size)
         let lenPtr = ref.alloc("int", n);
-        if(this.lib.asphodel_tcp_find_devices(list as ref.Pointer<ref.Pointer<any>>, lenPtr) != 0) {
-            throw new Error("Failed to find devices")
-        }
+        checkForError(this.lib, this.lib.asphodel_tcp_find_devices(list as ref.Pointer<ref.Pointer<any>>, lenPtr))
 
         let devices: DeviceWrapper[] = [];
 
-        let arch64 = ["arm64", "loong64", "ppc64", "riscv64", "x64"];
-        let a32 = false;
-        if(!arch64.includes(os.arch())){
-            a32 = true;
-        }
-
-
         for(let i = 0; i < lenPtr.deref(); i++) {
             let b = ref.alloc(ref.refType(Device));
-            if(a32) {
+            if(ffi.types.size_t.size == 4) {
                 if(os.endianness() == "BE") {
                     b.writeUInt32BE(list.readUInt32BE(i * 4))
                     devices.push(new DeviceWrapper(this.lib, b.deref()))
@@ -4373,25 +4360,16 @@ class TCP {
         return devices;
     }
 
-    public findDevicesFilter(n: number, flags: number) {
+    public async findDevicesFilter(n: number, flags: number) {
         let list = Buffer.alloc(n * DevicePtr.size)
         let lenPtr = ref.alloc("int", n);
-        if(this.lib.asphodel_tcp_find_devices_filter(list as ref.Pointer<ref.Pointer<any>>, lenPtr, flags) != 0) {
-            throw new Error("Failed to find devices")
-        }
+        checkForError(this.lib, this.lib.asphodel_tcp_find_devices_filter(list as ref.Pointer<ref.Pointer<any>>, lenPtr, flags))
 
         let devices: DeviceWrapper[] = [];
 
-        let arch64 = ["arm64", "loong64", "ppc64", "riscv64", "x64"];
-        let a32 = false;
-        if(!arch64.includes(os.arch())){
-            a32 = true;
-        }
-
-
         for(let i = 0; i < lenPtr.deref(); i++) {
             let b = ref.alloc(ref.refType(Device));
-            if(a32) {
+            if(ffi.types.size_t.size == 4) {
                 if(os.endianness() == "BE") {
                     b.writeUInt32BE(list.readUInt32BE(i * 4))
                     devices.push(new DeviceWrapper(this.lib, b.deref()))
@@ -4413,16 +4391,12 @@ class TCP {
     }
 
     public poll(milliseconds: number) {
-        if (this.lib.asphodel_tcp_poll_devices(milliseconds) != 0) {
-            throw new Error("Failed to poll usb devices")
-        }
+        checkForError(this.lib, this.lib.asphodel_tcp_poll_devices(milliseconds))
     }
 
     public createDevice(host: string, port: string, timeout: number, serial: string) {
         let ptr = ref.alloc(ref.refType(Device));
-        if(this.lib.asphodel_tcp_create_device(Buffer.from(host) as any, parseInt(port), timeout, Buffer.from(serial), ptr) != 0) {
-            throw new Error("Failed to create TCP device")
-        }
+        checkForError(this.lib, (this.lib.asphodel_tcp_create_device(Buffer.from(host) as any, parseInt(port), timeout, Buffer.from(serial), ptr)))
         return new DeviceWrapper(this.lib, ptr.deref())
     }
 }
