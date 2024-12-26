@@ -417,7 +417,7 @@ const ChannelCallibration = StructType({
 })
 
 const CtrlVarInfo = StructType({
-    name: "uint8*",
+    name: ArrayType("uint8"),
     name_length: "uint8",
     unit_type: "uint8",
     minimum: "int32",
@@ -1893,7 +1893,7 @@ export class ChannelInfoWrapper {
             bd.writeDoubleLE(disabled[i], i * ffi.types.double.size)
         }
         let pas = ref.alloc("int");
-        checkForError(this.lib,this.lib.example.asphodel_check_accel_self_test(this.inner, bd, be, pas));
+        checkForError(this.lib, this.lib.asphodel_check_accel_self_test(this.inner, bd, be, pas));
         return pas.deref();
     }
 
@@ -2042,7 +2042,8 @@ export class ChannelCallibrationWrapper {
 
 export class CtrlVarInfoWrapper {
     inner: any
-    lib: any; constructor(lib: any, inner: any) {
+    lib: any; 
+    constructor(lib: any, inner: any) {
         this.inner = inner; this.lib = lib;
     }
 
@@ -3027,16 +3028,17 @@ export class DeviceWrapper {
     public async getBootLoaderblockSizes(length: number) {
         let buf = Buffer.alloc(length * 2);
         let l = ref.alloc("uint8", length);
-        checkForError(this.lib,this.lib.asphodel_get_bootloader_page_info_blocking(this.inner, buf, l));
+        checkForError(this.lib,this.lib.asphodel_get_bootloader_block_sizes_blocking(this.inner, buf, l));
         let ub = new Uint16Array(l.deref());
         for (let i = 0; i < ub.length; i++) {
-            ub[i] = os.endianness() == "LE" ? buf.readUint16LE(i * ffi.types.float.size) : buf.readUint16BE(i * ffi.types.float.size)
+            ub[i] = os.endianness() == "LE" ? buf.readUint16LE(i * 2) : buf.readUint16BE(i * 2)
         }
         return ub
     }
 
-    public async startBootLoaderPage(page_number: number) {
-        checkForError(this.lib,this.lib.asphodel_start_bootloader_page_blocking(this.inner, page_number, ref.NULL, 0));
+    public async startBootLoaderPage(page_number: number, nonce: Uint8Array) {
+        let buf = Buffer.from(nonce);
+        checkForError(this.lib, this.lib.asphodel_start_bootloader_page_blocking(this.inner, page_number, buf, buf.length));
     }
 
     public async writeBootLoaderCodeBlock(data: Uint8Array) {
@@ -3044,8 +3046,18 @@ export class DeviceWrapper {
         checkForError(this.lib,this.lib.asphodel_write_bootloader_code_block_blocking(this.inner, db, db.length));
     }
 
-    public async finishBootloaderPage() {
-        checkForError(this.lib,this.lib.asphodel_finish_bootloader_page_blocking(this.inner, ref.NULL, 0));
+    public async finishBootloaderPage(mac_tag: Uint8Array) {
+        let mac = Buffer.from(mac_tag)
+        checkForError(this.lib,this.lib.asphodel_finish_bootloader_page_blocking(this.inner, mac, mac.length));
+    }
+
+    public async writeBoatloaderPage(data: Uint8Array, block_sizes: Uint16Array) {
+        let dbuf = Buffer.from(data);
+        let bbuf = Buffer.alloc(block_sizes.length * 2);
+        block_sizes.forEach((size, i)=>{
+            os.endianness() == "LE" ? bbuf.writeUint16LE(size, i * 2) : bbuf.writeUint16BE(size, i * 2)
+        })
+        checkForError(this.lib, this.lib.asphodel_write_bootloader_page_blocking(this.inner, dbuf, data.length, bbuf,block_sizes.length))
     }
 
     public async verifyBootloaderPage(mac_tag: Uint8Array) {
@@ -3071,12 +3083,12 @@ export class DeviceWrapper {
         let buf = Buffer.alloc(128);
         let ptr = ref.alloc("uint8", buf.length);
         checkForError(this.lib,this.lib.asphodel_get_ctrl_var_name_blocking(this.inner, index, buf, ptr));
-        return buf.toString("utf-8", 0, buf.indexOf(0));
+        return buf.toString("utf-8", 0, ptr.deref());
     }
 
     public async getCtrlVarInfo(index: number) {
         let ptr = ref.alloc(CtrlVarInfo);
-        checkForError(this.lib,this.lib.asphodel_get_ctrl_var_blocking(this.inner, index, ptr));
+        checkForError(this.lib, this.lib.asphodel_get_ctrl_var_info_blocking(this.inner, index, ptr));
         return new CtrlVarInfoWrapper(this.lib, ptr)
     }
 
@@ -3600,17 +3612,6 @@ class TCP {
     }
 
     public createDevice(host: string, port: string, timeout: number, serial: string) {
-        //const example = ffi.Library("./example.so", {
-        //    //'hello_world': ["void", ["string"]],  // Function with no arguments and void return type
-        //    //'add_numbers': ['int', ['int', 'int']]  // Function that takes two ints and returns an int
-        //    'getDevice': [Device, []],
-        //    "asphodel_get_user_tag_locations_blocking": ["int", [DevicePtr, "void*"]],
-        //    "asphodel_get_build_info_blocking": ["int", [DevicePtr, "void*", ffi.types.size_t]],
-        //    "asphodel_read_nvm_section_blocking": ["int", [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t]],
-        //    "asphodel_usb_find_devices": ["int", ["void*", ref.refType(ffi.types.size_t)]],
-        //    "asphodel_tcp_create_device": ["int", ["uint8*", "uint16", "int", "uint8*", ref.refType(DevicePtr)]],
-        //});
-
         let ptr = ref.alloc(ref.refType(Device));
         if(this.lib.asphodel_tcp_create_device(Buffer.from(host) as any, parseInt(port), timeout, Buffer.from(serial), ptr) != 0) {
             throw new Error("Failed to create TCP device")
@@ -3622,9 +3623,9 @@ class TCP {
 export {
     USB, TCP
 }
-
-
-
+//
+//
+//
 //export function getTestLib() {
 //
 //return ffi.Library("./example.so", {
@@ -3882,6 +3883,45 @@ export {
 //            "asphodel_supports_remote_commands": ["int", [DevicePtr]],
 //            "asphodel_supports_bootloader_commands": ["int", [DevicePtr]],
 //    
-//    
+//
+//        // asphodel_ctrl_var.h
+//        "asphodel_get_ctrl_var_count_blocking": ["int", [DevicePtr, "int*"]],
+//
+//        "asphodel_get_ctrl_var_name_blocking": ["int", [DevicePtr, "int", "uint8*", "uint8*"]],
+//
+//        "asphodel_get_ctrl_var_info_blocking": ["int", [DevicePtr, "int", CtrlVarInfoPtr]],
+//
+//        "asphodel_get_ctrl_var_blocking": ["int", [DevicePtr, "int", "int32*"]],
+//
+//        "asphodel_set_ctrl_var_blocking": ["int", [DevicePtr, "int", "int32"]],
+//
+//        "asphodel_get_strain_bridge_count": ["int", [ChannelInfoPtr, "int*"]],
+//        "asphodel_get_strain_bridge_subchannel": ["int", [ChannelInfoPtr, "int", ref.refType(ffi.types.size_t)]],
+//        "asphodel_get_strain_bridge_values": ["int", [ChannelInfoPtr, "int", "float*"]],
+//        
+//        "asphodel_set_strain_outputs_blocking": ["int", [DevicePtr, "int", "int", "int", "int"]],
+//        "asphodel_check_strain_resistances": ["int", [ChannelInfoPtr, "int", "double", "double", "double", "double*", "double*", "int*"]],
+//        "asphodel_get_accel_self_test_limits": ["int", [ChannelInfoPtr, "float*"]],
+//        
+//        "asphodel_enable_accel_self_test_blocking": ["int", [DevicePtr, "int", "int"]],
+//        "asphodel_check_accel_self_test": ["int", [ChannelInfoPtr, "double*", "double*", "int*"]],
+//
+//                // asphodel_bootloader.h
+//                "asphodel_bootloader_start_program_blocking": ["int", [DevicePtr]],
+//        
+//                "asphodel_get_bootloader_page_info_blocking": ["int", [DevicePtr, "uint32*", "uint8*"]],
+//        
+//                "asphodel_get_bootloader_block_sizes_blocking": ["int", [DevicePtr, "uint16*", "uint8*"]],
+//        
+//                "asphodel_start_bootloader_page_blocking": ["int", [DevicePtr, "uint32", "uint8*", ffi.types.size_t]],
+//        
+//                "asphodel_write_bootloader_code_block_blocking": ["int", [DevicePtr, "uint8*", ffi.types.size_t]],
+//        
+//                "asphodel_write_bootloader_page_blocking": ["int", [DevicePtr, "uint8*", ffi.types.size_t, "uint16*", ffi.types.size_t]],
+//        
+//                "asphodel_finish_bootloader_page_blocking": ["int", [DevicePtr, "uint8*", ffi.types.size_t]],
+//        
+//                "asphodel_verify_bootloader_page_blocking": ["int", [DevicePtr, "uint8*", ffi.types.size_t]],
+//        
 //})
 //}
