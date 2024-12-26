@@ -903,9 +903,9 @@ export function loadAsphodelLibrary(path: string) {
 
         // asphodel_decode.h
         "asphodel_create_channel_decoder": ["int", [ChannelInfoPtr, "uint16", ref.refType(ChannelDecoderPtr)]],
-        "asphodel_create_stream_decoder": ["int", [StreamAndChannelsPtr, "uint16", ref.refType(StreamDecoderPtr)]],
+        "asphodel_create_stream_decoder": ["int", [ArrayType(StreamAndChannels), "uint16", ref.refType(StreamDecoderPtr)]],
         "asphodel_create_device_decoder": ["int", [ArrayType(StreamAndChannels), "uint8", "uint8", "uint8", ref.refType(DeviceDecoder)]],
-        "asphodel_get_streaming_counts": ["int", [StreamAndChannelsPtr, "uint8", "double", "double", "int*", "int*", "int*"]],
+        "asphodel_get_streaming_counts": ["int", [ArrayType(StreamAndChannels), "uint8", "double", "double", "int*", "int*", "int*"]],
 
         // asphodel_device_type.h
         "asphodel_supports_rf_power_commands": ["int", [DevicePtr]],
@@ -1905,7 +1905,7 @@ export class StreamAndChannelsWrapper {
     cib: any
     stream_id: number
 
-    lib: any; constructor(lib: any, stream_id: number, stream_info: StreamInfoWrapper, channel_infos: ChannelInfoWrapper[]) {
+    lib: any; constructor(stream_id: number, stream_info: StreamInfoWrapper, channel_infos: ChannelInfoWrapper[]) {
         if (stream_info.getChannelCount() != channel_infos.length) {
             throw new Error("StreamInfo.channel_count != channel_infos.length");
         }
@@ -1928,7 +1928,7 @@ export class StreamAndChannelsWrapper {
             }
         })
 
-        let back = Buffer.alloc(StreamAndChannels.size)
+        let back = ref.alloc(StreamAndChannels)
         back.writeUInt8(stream_id, 0);
         if (ffi.types.size_t.size == 4) {
             if (os.endianness() == "BE") {
@@ -1947,7 +1947,8 @@ export class StreamAndChannelsWrapper {
                 back.writeBigUInt64LE(BigInt(cib.address()), 2 * ffi.types.size_t.size)
             }
         }
-        this.inner = new StreamAndChannels(back)
+        this.inner = back;
+        //new StreamAndChannels(back)
         this.cib = cib
         this.si = stream_info
     }
@@ -4054,19 +4055,35 @@ export class Version {
     constructor(lib: any) {
         this.lib = lib
     }
+/**
+Return the protocol version supported by this device in BCD form (e.g. 0x0200).
 
+ * @returns 
+ */
     public protocolVersion() {
         return this.lib.asphodel_get_library_protocol_version()
     }
+/**
+ Return the protocol version supported by this device in string form (e.g. "2.0.0").
 
+ * @returns 
+ */
     public protocolVersionString() {
         return this.lib.asphodel_get_library_protocol_version_string()
     }
+/**
+Return the library's build info string.
 
+ * @returns 
+ */
     public buildInfo() {
         return this.lib.asphodel_get_library_build_info()
     }
+/**
+Return the library's build date as a string.
 
+ * @returns 
+ */
     public buildDate() {
         return this.lib.asphodel_get_library_build_date()
     }
@@ -4078,32 +4095,73 @@ export class MemTest{
     constructor(lib: any) {
         this.lib = lib
     }
-
+/**
+ *  returns 1 if the library has been build with memory testing support (-DASPHODEL_MEM_TEST), and 0 otherwise.
+ 
+ * @returns 
+ */
     public supported() {
         return this.lib.asphodel_mem_test_supported();
     }
+/**
+sets the malloc limit. -1 is no limit. 0 means next malloc call will return NULL.
 
+ * @param limit 
+ * @returns 
+ */
     public setLimit(limit: number) {
         return this.lib.asphodel_mem_test_set_limit(limit)
     }
 
+    /**
+returns the current malloc limit
+    
+     * @returns 
+     */
     public getLimit() {
         return this.lib.asphodel_mem_test_get_limit()
     }
 }
 
+/**
+Create a stream decoder for the supplied stream and channels. The bit offset is the number of bits from the
+beginning of the stream packet to the first bit of the stream. The stream decoder is returned via the decoder
+parameter. The decoder can be freed via its free_decoder function.
+ * @param lib 
+ * @param stream_and_channels 
+ * @param stream_bit_offset 
+ * @returns 
+ */
 export function createStreamDecoder(lib: any, stream_and_channels: StreamAndChannelsWrapper, stream_bit_offset: number) {
     let dec = ref.alloc(StreamDecoderPtr);
-    checkForError(this.lib,lib.asphodel_create_stream_decoder(stream_and_channels.inner, stream_bit_offset, dec));
+    checkForError(lib,lib.asphodel_create_stream_decoder(stream_and_channels.inner, stream_bit_offset, dec));
     return new StreamDecoderWrapper(lib, dec.deref())
 }
-
+/**
+Create a channel decoder for the supplied channel. The bit offset is the number of bits from the beginning of the
+stream data to the first bit of the channel. The channel decoder is returned via the decoder parameter. The decoder
+can be freed via its free_decoder function.
+ * @param lib 
+ * @param channel_info 
+ * @param channel_bit_offset 
+ * @returns 
+ */
 export function createChannelDecoder(lib: any, channel_info: ChannelInfoWrapper, channel_bit_offset: number) {
     let ptr = ref.alloc(ChannelDecoderPtr);
-    checkForError(this.lib,lib.asphodel_create_channel_decoder(channel_info.inner, channel_bit_offset, ptr));
+    checkForError(lib,lib.asphodel_create_channel_decoder(channel_info.inner, channel_bit_offset, ptr));
     return new ChannelDecoderWrapper(lib, ptr.deref());
 }
 
+/**
+Create a device decoder for the supplied streams and channels. The filler bits are the number of bits from the
+beginning of the stream packet to the first bit of the id. The device decoder is returned via the decoder parameter.
+The decoder can be freed via its free_decoder function.
+ * @param lib 
+ * @param stream_and_channels 
+ * @param filler_bits 
+ * @param id_bits 
+ * @returns 
+ */
 export function createDeviceDecoder(lib: any, stream_and_channels: StreamAndChannelsWrapper[], filler_bits: number, id_bits: number) {
     let cib = Buffer.alloc(StreamAndChannels.size * stream_and_channels.length);
     stream_and_channels.forEach((item, i) => {
@@ -4124,10 +4182,61 @@ export function createDeviceDecoder(lib: any, stream_and_channels: StreamAndChan
     })
     
     let dec = ref.alloc(DeviceDecoderPtr);
-    checkForError(this.lib,lib.asphodel_create_device_decoder(cib, stream_and_channels.length, filler_bits, id_bits, dec));
-    return new ChannelDecoderWrapper(lib, dec.deref())
+    checkForError(lib,lib.asphodel_create_device_decoder(cib, stream_and_channels.length, filler_bits, id_bits, dec));
+    return new DeviceDecoderWrapper(lib, dec.deref())
 }
 
+/**
+Calculate reasonable packet count, transfer count and timeout. The info_array should contain the list of streams
+that will be streamed from all at once (channel information will be ignored). Response time (in seconds) determines
+how many packets should be bundled together for processing (i.e. the streaming callback will trigger with an average
+period equal to the response time). The buffer time (in seconds) determines how many transfers should be active to
+be able to hold enough data (i.e. if processing stalls there will be enough transfers running to hold buffer_time
+seconds worth of data). The desired timeout should be passed to the function. The timeout will be increased, if
+necessary, to twice the fastest packet interval (to prevent timeouts under normal circumstances).
+NOTE: this function is too simplistic if not all streams in info_array will be used at the same time. In such a case
+the streaming counts should be calculated some other way.
+ 
+ * @param lib 
+ * @param stream_and_channels 
+ * @param response_time 
+ * @param buffer_time 
+ * @returns 
+ */
+export function getStreamingCounts(
+    lib: any,
+    stream_and_channels: StreamAndChannelsWrapper[], 
+    response_time: number,
+    buffer_time: number,
+
+) {
+    let cib = Buffer.alloc(StreamAndChannels.size * stream_and_channels.length);
+    stream_and_channels.forEach((item, i) => {
+        let buv: ref.Pointer<any> = item.inner;
+        if (ffi.types.size_t.size == 4) {
+            if (os.endianness() == "BE") {
+                cib.set(buv, i * StreamAndChannels.size)
+            } else {
+                cib.set(buv, i * StreamAndChannels.size)
+            }
+        } else {
+            if (os.endianness() == "BE") {
+                cib.set(buv, i * StreamAndChannels.size)
+            } else {
+                cib.set(buv, i * StreamAndChannels.size)
+            }
+        }
+    })
+    let packet_count = ref.alloc("int")
+    let tranfer_count = ref.alloc("uint32")
+    let timeout = ref.alloc("uint32");
+    checkForError(lib, lib.asphodel_get_streaming_counts(cib, cib.length, response_time, buffer_time, packet_count,tranfer_count, timeout))
+    return {
+        packet_count: packet_count.deref(),
+        tranfer_count: tranfer_count.deref(),
+        timeout: timeout.deref()
+    }
+}
 
 class USB {
     lib: any
@@ -4622,6 +4731,12 @@ export {
 //                "asphodel_finish_bootloader_page_blocking": ["int", [DevicePtr, "uint8*", ffi.types.size_t]],
 //        
 //                "asphodel_verify_bootloader_page_blocking": ["int", [DevicePtr, "uint8*", ffi.types.size_t]],
-//        
+//                
+//                
+//                "asphodel_create_channel_decoder": ["int", [ChannelInfoPtr, "uint16", ref.refType(ChannelDecoderPtr)]],
+//        "asphodel_create_stream_decoder": ["int", [ArrayType(StreamAndChannels), "uint16", ref.refType(StreamDecoderPtr)]],
+//        "asphodel_create_device_decoder": ["int", [ArrayType(StreamAndChannels), "uint8", "uint8", "uint8", ref.refType(DeviceDecoder)]],
+//        "asphodel_get_streaming_counts": ["int", [ArrayType(StreamAndChannels), "uint8", "double", "double", "int*", "int*", "int*"]],
+//
 //})
 //}
