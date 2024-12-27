@@ -1711,10 +1711,10 @@ export class StreamDecoderWrapper {
         return this.inner.deref().counter_decoder(b, last);
     }
 
-    public setLostPacketCallback(cb: (last: number) => void) {
-        this.cb = ffi.Callback("void", ["uint64", "void*"],
-            (__last: number, cls) => {
-                cb(__last);
+    public setLostPacketCallback(cb: (current: number, last: number) => void) {
+        this.cb = ffi.Callback("void", ["uint64","uint64", "void*"],
+            (__current:number, __last: number, cls) => {
+                cb(__current,__last);
             })
 
         let new_inner = this.inner.deref();
@@ -1764,9 +1764,9 @@ export class DeviceDecoderWrapper {
     }
 
 
-    public decode(counter: number, buff: Uint8Array) {
+    public decode(buff: Uint8Array) {
         let b = Buffer.from(buff)
-        this.inner.deref().decode(this.inner, counter, b)
+        this.inner.deref().decode(this.inner, b)
     }
 
     public free() {
@@ -4304,7 +4304,7 @@ export function getStreamingCounts(
     stream_and_channels: StreamAndChannelsWrapper[], 
     response_time: number,
     buffer_time: number,
-
+    timeoutttttt:number
 ) {
     let cib = Buffer.alloc(StreamAndChannels.size * stream_and_channels.length);
     stream_and_channels.forEach((item, i) => {
@@ -4325,7 +4325,7 @@ export function getStreamingCounts(
     })
     let packet_count = ref.alloc("int")
     let tranfer_count = ref.alloc("uint32")
-    let timeout = ref.alloc("uint32");
+    let timeout = ref.alloc("uint32", timeoutttttt);
     checkForError(lib, lib.asphodel_get_streaming_counts(cib, cib.length, response_time, buffer_time, packet_count,tranfer_count, timeout))
     return {
         packet_count: packet_count.deref(),
