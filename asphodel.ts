@@ -1,8 +1,8 @@
-import StructType from "ref-struct-napi";
-import UnionType from "ref-union-napi";
-import ArrayType from "ref-array-napi";
-import ffi from "ffi-napi";
-import ref from "ref-napi";
+import * as StructType from "ref-struct-napi";
+import * as UnionType from "ref-union-napi";
+import * as ArrayType from "ref-array-napi";
+import * as ffi from "ffi-napi";
+import * as ref from "ref-napi";
 
 //let dummy = loadAsphodelLibrary("");
 
@@ -333,8 +333,6 @@ export const ACCEL_ENABLE_SELF_TEST = 0x01;
 
 const AsphodelCommandCallback = "void*";
 
-console.log("StructType: ", StructType);
-
 const Device = StructType({
   protocal: ffi.types.int,
   location_string: ffi.types.CString,
@@ -651,14 +649,34 @@ export const ASPHODEL_TCP_FILTER_ONLY_IPV4 = 0x3; // only search for devices usi
 export const ASPHODEL_TCP_FILTER_RETURN_ALL = 0x4; // return each protocol instance of all devices found
 
 const UnitFormatter = StructType({
-  format_bare: "void*",
-  format_ascii: "void*",
-  format_utf8: "void*",
-  format_html: "void*",
-  free: "void*",
-  unit_ascii: "uint8*",
-  unit_utf8: "uint8*",
-  unit_hmtl: "uint8*",
+  format_bare: ffi.Function("int", [
+    "void*",
+    "uint8*",
+    ffi.types.size_t,
+    "double",
+  ]),
+  format_ascii: ffi.Function("int", [
+    "void*",
+    "uint8*",
+    ffi.types.size_t,
+    "double",
+  ]),
+  format_utf8: ffi.Function("int", [
+    "void*",
+    "uint8*",
+    ffi.types.size_t,
+    "double",
+  ]),
+  format_html: ffi.Function("int", [
+    "void*",
+    "uint8*",
+    ffi.types.size_t,
+    "double",
+  ]),
+  free: ffi.Function("void", ["void*"]),
+  unit_ascii: ffi.types.CString,
+  unit_utf8: ffi.types.CString,
+  unit_hmtl: ffi.types.CString,
   conversion_scale: "double",
   conversion_offset: "double",
 });
@@ -2109,6 +2127,166 @@ export function loadAsphodelLibrary(path: string) {
 
 import * as os from "node:os";
 
+export class UnitFormatterWrapper {
+  lib: any;
+  inner: ref.Pointer<any>;
+  constructor(
+    lib: any,
+    unit_type: number,
+    minimum: number,
+    maximum: number,
+    resolution: number,
+    use_metric: number
+  ) {
+    this.lib = lib;
+    const fmter: ref.Pointer<any> = this.lib.asphodel_create_unit_formatter(
+      unit_type,
+      minimum,
+      maximum,
+      resolution,
+      use_metric
+    );
+    if (fmter.isNull()) {
+      throw new Error("Failed to create unit formatter");
+    }
+    this.inner = fmter;
+  }
+
+  public formatBare(buffer_size: number, value: number) {
+    let buf = Buffer.alloc(buffer_size);
+    checkForError(
+      this.lib,
+      this.inner.deref().format_bare(this.inner, buf, buffer_size, value)
+    );
+    return buf.toString("utf-8");
+  }
+
+  public formatAscii(buffer_size: number, value: number) {
+    let buf = Buffer.alloc(buffer_size);
+    checkForError(
+      this.lib,
+      this.inner.deref().format_ascii(this.inner, buf, buffer_size, value)
+    );
+    return buf.toString("utf-8");
+  }
+
+  public formatUtf8(buffer_size: number, value: number) {
+    let buf = Buffer.alloc(buffer_size);
+    checkForError(
+      this.lib,
+      this.inner.deref().format_utf8(this.inner, buf, buffer_size, value)
+    );
+    return buf.toString("utf-8");
+  }
+
+  public formatHtml(buffer_size: number, value: number) {
+    let buf = Buffer.alloc(buffer_size);
+    checkForError(
+      this.lib,
+      this.inner.deref().format_html(this.inner, buf, buffer_size, value)
+    );
+    return buf.toString("utf-8");
+  }
+
+  public free() {
+    this.inner.deref().free(this.inner);
+  }
+
+  public getUnitAscii() {
+    return this.inner.deref().unit_ascii;
+  }
+
+  public getUnitUtf8() {
+    return this.inner.deref().unit_utf8;
+  }
+
+  public getUnitHtml() {
+    return this.inner.deref().unit_hmtl;
+  }
+
+  public getConversionScale() {
+    return this.inner.deref().conversion_scale;
+  }
+
+  public getConversionOffset() {
+    return this.inner.deref().conversion_offset;
+  }
+}
+
+export class Format {
+  lib: any;
+
+  constructor(lib: any) {
+    this.lib = lib;
+  }
+
+  public formatValueAscii(
+    buffer_size: number,
+    unit_type: number,
+    resolution: number,
+    usemetric: number,
+    value: number
+  ) {
+    let buf = Buffer.alloc(buffer_size);
+    checkForError(
+      this.lib,
+      this.lib.asphodel_format_value_ascii(
+        buf,
+        buffer_size,
+        unit_type,
+        resolution,
+        usemetric,
+        value
+      )
+    );
+    return buf.toString("utf-8");
+  }
+
+  public formatValueUtf8(
+    buffer_size: number,
+    unit_type: number,
+    resolution: number,
+    usemetric: number,
+    value: number
+  ) {
+    let buf = Buffer.alloc(buffer_size);
+    checkForError(
+      this.lib,
+      this.lib.asphodel_format_value_utf8(
+        buf,
+        buffer_size,
+        unit_type,
+        resolution,
+        usemetric,
+        value
+      )
+    );
+    return buf.toString("utf-8");
+  }
+
+  public formatValueHtml(
+    buffer_size: number,
+    unit_type: number,
+    resolution: number,
+    usemetric: number,
+    value: number
+  ) {
+    let buf = Buffer.alloc(buffer_size);
+    checkForError(
+      this.lib,
+      this.lib.asphodel_format_value_html(
+        buf,
+        buffer_size,
+        unit_type,
+        resolution,
+        usemetric,
+        value
+      )
+    );
+    return buf.toString("utf-8");
+  }
+}
+
 export class API {
   lib: any;
   constructor(lib: any) {
@@ -2440,6 +2618,8 @@ export class SettingInfoWrapper {
           this.lib,
           union.custom_enum_setting
         );
+      case SETTING_TYPE_STRING:
+        return new StringSettingWrapper(this.lib, union.string_setting);
       default:
         throw new Error("Invalid setting type");
     }
@@ -2651,12 +2831,12 @@ export class StreamDecoderWrapper {
     return this.inner.deref().counter_decoder(b, last);
   }
 
-  public setLostPacketCallback(cb: (last: number) => void) {
+  public setLostPacketCallback(cb: (current: number, last: number) => void) {
     this.cb = ffi.Callback(
       "void",
-      ["uint64", "void*"],
-      (__last: number, cls) => {
-        cb(__last);
+      ["uint64", "uint64", "void*"],
+      (__current: number, __last: number, cls) => {
+        cb(__current, __last);
       }
     );
 
@@ -2709,9 +2889,9 @@ export class DeviceDecoderWrapper {
     this.lib = lib;
   }
 
-  public decode(counter: number, buff: Uint8Array) {
+  public decode(buff: Uint8Array) {
     let b = Buffer.from(buff);
-    this.inner.deref().decode(this.inner, counter, b);
+    this.inner.deref().decode(this.inner, b);
   }
 
   public free() {
@@ -2848,6 +3028,10 @@ export class ChannelInfoWrapper {
           : b.readFloatBE(i * ffi.types.float.size);
     }
     return floats;
+  }
+
+  public getChunkCount() {
+    return this.inner.deref().chunk_count;
   }
 
   public getChunks() {
@@ -3292,9 +3476,7 @@ Open the device for usage. Must be called before any others.
  * 
  */
   public open() {
-    if (this.inner.deref().open_device(this.inner) != 0) {
-      throw new Error("Failed to open device");
-    }
+    checkForError(this.lib, this.inner.deref().open_device(this.inner));
   }
   /**
 Close the device and release any shared resources (e.g. usb handles, tcp sockets).
@@ -5966,6 +6148,7 @@ returns `true` if the device supports bootloader commands (in asphodel_bootloade
     return this.lib.asphodel_supports_bootloader_commands(this.inner) == 1;
   }
 }
+
 export class Version {
   lib: any;
   constructor(lib: any) {
@@ -6158,7 +6341,8 @@ export function getStreamingCounts(
   lib: any,
   stream_and_channels: StreamAndChannelsWrapper[],
   response_time: number,
-  buffer_time: number
+  buffer_time: number,
+  timeoutttttt: number
 ) {
   let cib = Buffer.alloc(StreamAndChannels.size * stream_and_channels.length);
   stream_and_channels.forEach((item, i) => {
@@ -6179,7 +6363,7 @@ export function getStreamingCounts(
   });
   let packet_count = ref.alloc("int");
   let tranfer_count = ref.alloc("uint32");
-  let timeout = ref.alloc("uint32");
+  let timeout = ref.alloc("uint32", timeoutttttt);
   checkForError(
     lib,
     lib.asphodel_get_streaming_counts(
@@ -6241,10 +6425,15 @@ class USB {
     the address pointed to by list_size. ALL returned devices must be freed (either immediately or at a later point)
     by the calling code by calling the AsphodelDevice_t free_device function pointer.
     */
-  public async findDevices(n: number) {
-    let list = Buffer.alloc(n * DevicePtr.size);
-    let lenPtr = ref.alloc("int", n);
+  public async findDevices() {
+    let lenPtr = ref.alloc("int", 0);
 
+    checkForError(
+      this.lib,
+      this.lib.asphodel_usb_find_devices(ref.NULL, lenPtr)
+    );
+
+    let list = Buffer.alloc(lenPtr.deref() * DevicePtr.size);
     checkForError(
       this.lib,
       this.lib.asphodel_usb_find_devices(list as ref.Pointer<unknown>, lenPtr)
@@ -6291,9 +6480,14 @@ class TCP {
     return this.lib.asphodel_tcp_devices_supported() == 1 ? true : false;
   }
 
-  public async findDevices(n: number) {
-    let list = Buffer.alloc(n * DevicePtr.size);
-    let lenPtr = ref.alloc("int", n);
+  public async findDevices() {
+    let lenPtr = ref.alloc("int", 0);
+    checkForError(
+      this.lib,
+      this.lib.asphodel_tcp_find_devices(ref.NULL, lenPtr)
+    );
+
+    let list = Buffer.alloc(lenPtr.deref() * DevicePtr.size);
     checkForError(
       this.lib,
       this.lib.asphodel_tcp_find_devices(
@@ -6327,9 +6521,14 @@ class TCP {
     return devices;
   }
 
-  public async findDevicesFilter(n: number, flags: number) {
-    let list = Buffer.alloc(n * DevicePtr.size);
-    let lenPtr = ref.alloc("int", n);
+  public async findDevicesFilter(flags: number) {
+    let lenPtr = ref.alloc("int", 0);
+    checkForError(
+      this.lib,
+      this.lib.asphodel_tcp_find_devices_filter(ref.NULL, lenPtr, flags)
+    );
+
+    let list = Buffer.alloc(lenPtr.deref() * DevicePtr.size);
     checkForError(
       this.lib,
       this.lib.asphodel_tcp_find_devices_filter(
@@ -6390,3 +6589,605 @@ class TCP {
 }
 
 export { USB, TCP };
+
+export function getTestLib() {
+  return ffi.Library("./example.so", {
+    asphodel_usb_find_devices: [
+      "int",
+      ["void*", ref.refType(ffi.types.size_t)],
+    ],
+    asphodel_usb_init: ["int", []],
+
+    asphodel_error_name: ["string", ["int32"]], // Function with no arguments and void return type
+
+    asphodel_get_supply_count_blocking: ["int", [DevicePtr, "int*"]],
+
+    asphodel_get_supply_name_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_supply_info_blocking: [
+      "int",
+      [DevicePtr, "int", SupplyInfoPtr],
+    ],
+
+    asphodel_check_supply_blocking: [
+      "int",
+      [DevicePtr, "int", "int32*", "uint8*", "int"],
+    ],
+
+    asphodel_get_stream_count_blocking: [
+      "int",
+      [DevicePtr, "int*", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_stream_blocking: [
+      "int",
+      [DevicePtr, "int", ref.refType(StreamInfoPtr)],
+    ],
+
+    asphodel_free_stream: ["int", [StreamInfoPtr]],
+
+    asphodel_get_stream_channels_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_stream_format_blocking: [
+      "int",
+      [DevicePtr, "int", StreamInfoPtr],
+    ],
+
+    asphodel_enable_stream_blocking: ["int", [DevicePtr, "int", "int"]],
+
+    asphodel_warm_up_stream_blocking: ["int", [DevicePtr, "int", "int"]],
+
+    asphodel_get_stream_status_blocking: [
+      "int",
+      [DevicePtr, "int", "int*", "int*"],
+    ],
+
+    asphodel_get_stream_rate_info_blocking: [
+      "int",
+      [DevicePtr, "int", "int*", "int*", "int*", "float*", "float*"],
+    ],
+
+    asphodel_get_channel_count_blocking: ["int", [DevicePtr, "int*"]],
+
+    asphodel_get_channel_blocking: [
+      "int",
+      [DevicePtr, "int", ref.refType(ChannelInfoPtr)],
+    ],
+
+    asphodel_free_channel: ["int", [ChannelInfoPtr]],
+
+    asphodel_get_channel_name_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", ref.refType("uint8")],
+    ],
+
+    asphodel_get_channel_info_blocking: [
+      "int",
+      [DevicePtr, "int", ChannelInfoPtr],
+    ],
+
+    asphodel_get_channel_coefficients_blocking: [
+      "int",
+      [DevicePtr, "int", "float*", "uint8*"],
+    ],
+
+    asphodel_get_channel_chunk_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8", "uint8*", "uint8*"],
+    ],
+
+    asphodel_channel_specific_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_channel_calibration_blocking: [
+      "int",
+      [DevicePtr, "int", "int*", ChannelCallibrationPtr],
+    ],
+    //===========================================================setting
+    asphodel_get_setting_count_blocking: ["int", [DevicePtr, "int*"]],
+
+    asphodel_get_setting_name_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_setting_info_blocking: [
+      "int",
+      [DevicePtr, "int", SettingInfoPtr],
+    ],
+
+    asphodel_get_setting_default_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_custom_enum_counts_blocking: [
+      "int",
+      [DevicePtr, "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_custom_enum_value_name_blocking: [
+      "int",
+      [DevicePtr, "int", "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_setting_category_count_blocking: ["int", [DevicePtr, "int*"]],
+
+    asphodel_get_setting_category_name_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_setting_category_settings_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    /// =============power
+    asphodel_enable_rf_power_blocking: ["int", [DevicePtr, "int"]],
+
+    asphodel_get_rf_power_status_blocking: ["int", [DevicePtr, "int*"]],
+
+    asphodel_get_rf_power_ctrl_vars_blocking: [
+      "int",
+      [DevicePtr, "uint8*", "uint8*"],
+    ],
+
+    asphodel_reset_rf_power_timeout_blocking: ["int", [DevicePtr, "uint32"]],
+
+    /// =======radio
+
+    asphodel_stop_radio_blocking: ["int", [DevicePtr]],
+
+    asphodel_start_radio_scan_blocking: ["int", [DevicePtr]],
+
+    asphodel_get_raw_radio_scan_results_blocking: [
+      "int",
+      [DevicePtr, ArrayType("uint32"), ref.refType(ffi.types.size_t)],
+    ],
+
+    asphodel_get_radio_scan_results_blocking: [
+      "int",
+      [DevicePtr, "uint32*", ref.refType(ffi.types.size_t)],
+    ],
+
+    asphodel_free_radio_scan_results: ["int", ["uint32*"]],
+
+    asphodel_get_raw_radio_extra_scan_results_blocking: [
+      "int",
+      [DevicePtr, ExtraScanResultPtr, ref.refType(ffi.types.size_t)],
+    ],
+
+    asphodel_get_radio_extra_scan_results_blocking: [
+      "int",
+      [DevicePtr, ExtraScanResultPtr, ref.refType(ffi.types.size_t)],
+    ],
+
+    asphodel_free_radio_extra_scan_results: ["int", [ExtraScanResultPtr]],
+
+    asphodel_get_radio_scan_power_blocking: [
+      "int",
+      [DevicePtr, "uint32*", "uint8*", ffi.types.size_t],
+    ],
+
+    asphodel_connect_radio_blocking: ["int", [DevicePtr, "uint32"]],
+
+    asphodel_get_radio_status_blocking: [
+      "int",
+      [DevicePtr, "int*", "uint32*", "uint8*", "int*"],
+    ],
+
+    asphodel_get_radio_ctrl_vars_blocking: [
+      "int",
+      [DevicePtr, "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_radio_default_serial_blocking: ["int", [DevicePtr, "uint32*"]],
+
+    asphodel_start_radio_scan_boot_blocking: ["int", [DevicePtr]],
+
+    asphodel_connect_radio_boot_blocking: ["int", [DevicePtr, "uint32"]],
+
+    asphodel_stop_remote_blocking: ["int", [DevicePtr]],
+
+    asphodel_restart_remote_blocking: ["int", [DevicePtr]],
+
+    asphodel_get_remote_status_blocking: [
+      "int",
+      [DevicePtr, "int*", "uint32*", "uint8*"],
+    ],
+
+    asphodel_restart_remote_app_blocking: ["int", [DevicePtr]],
+
+    asphodel_restart_remote_boot_blocking: ["int", [DevicePtr]],
+
+    // asphodel_low_level.h
+    asphodel_get_gpio_port_count_blocking: ["int", [DevicePtr, "int*"]],
+
+    asphodel_get_gpio_port_name_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_gpio_port_info_blocking: [
+      "int",
+      [DevicePtr, "int", GPIOPortInfoPtr],
+    ],
+
+    asphodel_get_gpio_port_values_blocking: [
+      "int",
+      [DevicePtr, "int", "uint32*"],
+    ],
+
+    asphodel_set_gpio_port_modes_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8", "uint32"],
+    ],
+
+    asphodel_disable_gpio_overrides_blocking: ["int", [DevicePtr]],
+
+    asphodel_get_bus_counts_blocking: ["int", [DevicePtr, "int*", "int*"]],
+
+    asphodel_set_spi_cs_mode_blocking: ["int", [DevicePtr, "int", "uint8"]],
+
+    asphodel_do_spi_transfer_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*", "uint8"],
+    ],
+
+    asphodel_do_i2c_write_read_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8", "uint8*", "uint8", "uint8*", "uint8"],
+    ],
+
+    asphodel_do_i2c_write_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8", "uint8*", "uint8"],
+    ],
+
+    asphodel_do_i2c_read_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8", "uint8*", "uint8"],
+    ],
+
+    asphodel_do_radio_fixed_test_blocking: [
+      "int",
+      [DevicePtr, "uint16", "uint16", "uint8"],
+    ],
+
+    asphodel_do_radio_sweep_test_blocking: [
+      "int",
+      [DevicePtr, "uint16", "uint16", "uint16", "uint16", "uint8"],
+    ],
+
+    asphodel_get_info_region_count_blocking: ["int", [DevicePtr, "int*"]],
+
+    asphodel_get_info_region_name_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_info_region_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_stack_info_blocking: ["int", [DevicePtr, "uint32*"]],
+
+    asphodel_echo_raw_blocking: [
+      "int",
+      [
+        DevicePtr,
+        "uint8*",
+        ffi.types.size_t,
+        "uint8*",
+        ref.refType(ffi.types.size_t),
+      ],
+    ],
+
+    asphodel_echo_transaction_blocking: [
+      "int",
+      [
+        DevicePtr,
+        "uint8*",
+        ffi.types.size_t,
+        "uint8*",
+        ref.refType(ffi.types.size_t),
+      ],
+    ],
+
+    asphodel_echo_params_blocking: [
+      "int",
+      [
+        DevicePtr,
+        "uint8*",
+        ffi.types.size_t,
+        "uint8*",
+        ref.refType(ffi.types.size_t),
+      ],
+    ],
+
+    // asphodel_device.h
+    asphodel_get_protocol_version_blocking: ["int", [DevicePtr, "uint16*"]],
+
+    asphodel_get_protocol_version_string_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_board_info_blocking: [
+      "int",
+      [DevicePtr, "void*", "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_user_tag_locations_blocking: ["int", [DevicePtr, "void*"]],
+
+    asphodel_get_build_info_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_build_date_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_commit_id_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_repo_branch_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_repo_name_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_chip_family_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_chip_model_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_chip_id_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_nvm_size_blocking: [
+      "int",
+      [DevicePtr, ref.refType(ffi.types.size_t)],
+    ],
+
+    asphodel_erase_nvm_blocking: ["int", [DevicePtr]],
+
+    asphodel_write_nvm_raw_blocking: [
+      "int",
+      [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_write_nvm_section_blocking: [
+      "int",
+      [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_read_nvm_raw_blocking: [
+      "int",
+      [DevicePtr, ffi.types.size_t, "void*", ref.refType(ffi.types.size_t)],
+    ],
+
+    asphodel_read_nvm_section_blocking: [
+      "int",
+      [DevicePtr, ffi.types.size_t, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_read_user_tag_string_blocking: [
+      "int",
+      [DevicePtr, ffi.types.size_t, ffi.types.size_t, "void*"],
+    ],
+
+    asphodel_write_user_tag_string_blocking: [
+      "int",
+      [DevicePtr, ffi.types.size_t, ffi.types.size_t, "void*"],
+    ],
+
+    asphodel_get_nvm_modified_blocking: ["int", [DevicePtr, "void*"]],
+
+    asphodel_get_nvm_hash_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_get_setting_hash_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_flush_blocking: ["int", [DevicePtr]],
+
+    asphodel_reset_blocking: ["int", [DevicePtr]],
+
+    asphodel_get_bootloader_info_blocking: [
+      "int",
+      [DevicePtr, "void*", ffi.types.size_t],
+    ],
+
+    asphodel_bootloader_jump_blocking: ["int", [DevicePtr]],
+
+    asphodel_get_reset_flag_blocking: ["int", [DevicePtr, "void*"]],
+
+    asphodel_clear_reset_flag_blocking: ["int", [DevicePtr]],
+
+    asphodel_get_rgb_count_blocking: ["int", [DevicePtr, "void*"]],
+
+    asphodel_get_rgb_values_blocking: ["int", [DevicePtr, "int", "void*"]],
+
+    asphodel_set_rgb_values_blocking: [
+      "int",
+      [DevicePtr, "int", "void*", "int"],
+    ],
+
+    asphodel_set_rgb_values_hex_blocking: [
+      "int",
+      [DevicePtr, "int", "uint32", "int"],
+    ],
+
+    asphodel_get_led_count_blocking: ["int", [DevicePtr, "void*"]],
+
+    asphodel_get_led_value_blocking: ["int", [DevicePtr, "int", "void*"]],
+
+    asphodel_set_led_value_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8", "int"],
+    ],
+
+    asphodel_set_device_mode_blocking: ["int", [DevicePtr, "uint8"]],
+
+    asphodel_get_device_mode_blocking: ["int", [DevicePtr, "uint8*"]],
+
+    asphodel_supports_rf_power_commands: ["int", [DevicePtr]],
+    asphodel_supports_radio_commands: ["int", [DevicePtr]],
+    asphodel_supports_remote_commands: ["int", [DevicePtr]],
+    asphodel_supports_bootloader_commands: ["int", [DevicePtr]],
+
+    // asphodel_ctrl_var.h
+    asphodel_get_ctrl_var_count_blocking: ["int", [DevicePtr, "int*"]],
+
+    asphodel_get_ctrl_var_name_blocking: [
+      "int",
+      [DevicePtr, "int", "uint8*", "uint8*"],
+    ],
+
+    asphodel_get_ctrl_var_info_blocking: [
+      "int",
+      [DevicePtr, "int", CtrlVarInfoPtr],
+    ],
+
+    asphodel_get_ctrl_var_blocking: ["int", [DevicePtr, "int", "int32*"]],
+
+    asphodel_set_ctrl_var_blocking: ["int", [DevicePtr, "int", "int32"]],
+
+    asphodel_get_strain_bridge_count: ["int", [ChannelInfoPtr, "int*"]],
+    asphodel_get_strain_bridge_subchannel: [
+      "int",
+      [ChannelInfoPtr, "int", ref.refType(ffi.types.size_t)],
+    ],
+    asphodel_get_strain_bridge_values: [
+      "int",
+      [ChannelInfoPtr, "int", "float*"],
+    ],
+
+    asphodel_set_strain_outputs_blocking: [
+      "int",
+      [DevicePtr, "int", "int", "int", "int"],
+    ],
+    asphodel_check_strain_resistances: [
+      "int",
+      [
+        ChannelInfoPtr,
+        "int",
+        "double",
+        "double",
+        "double",
+        "double*",
+        "double*",
+        "int*",
+      ],
+    ],
+    asphodel_get_accel_self_test_limits: ["int", [ChannelInfoPtr, "float*"]],
+
+    asphodel_enable_accel_self_test_blocking: [
+      "int",
+      [DevicePtr, "int", "int"],
+    ],
+    asphodel_check_accel_self_test: [
+      "int",
+      [ChannelInfoPtr, "double*", "double*", "int*"],
+    ],
+
+    // asphodel_bootloader.h
+    asphodel_bootloader_start_program_blocking: ["int", [DevicePtr]],
+
+    asphodel_get_bootloader_page_info_blocking: [
+      "int",
+      [DevicePtr, "uint32*", "uint8*"],
+    ],
+
+    asphodel_get_bootloader_block_sizes_blocking: [
+      "int",
+      [DevicePtr, "uint16*", "uint8*"],
+    ],
+
+    asphodel_start_bootloader_page_blocking: [
+      "int",
+      [DevicePtr, "uint32", "uint8*", ffi.types.size_t],
+    ],
+
+    asphodel_write_bootloader_code_block_blocking: [
+      "int",
+      [DevicePtr, "uint8*", ffi.types.size_t],
+    ],
+
+    asphodel_write_bootloader_page_blocking: [
+      "int",
+      [DevicePtr, "uint8*", ffi.types.size_t, "uint16*", ffi.types.size_t],
+    ],
+
+    asphodel_finish_bootloader_page_blocking: [
+      "int",
+      [DevicePtr, "uint8*", ffi.types.size_t],
+    ],
+
+    asphodel_verify_bootloader_page_blocking: [
+      "int",
+      [DevicePtr, "uint8*", ffi.types.size_t],
+    ],
+
+    asphodel_create_channel_decoder: [
+      "int",
+      [ChannelInfoPtr, "uint16", ref.refType(ChannelDecoderPtr)],
+    ],
+    asphodel_create_stream_decoder: [
+      "int",
+      [ArrayType(StreamAndChannels), "uint16", ref.refType(StreamDecoderPtr)],
+    ],
+    asphodel_create_device_decoder: [
+      "int",
+      [
+        ArrayType(StreamAndChannels),
+        "uint8",
+        "uint8",
+        "uint8",
+        ref.refType(DeviceDecoder),
+      ],
+    ],
+    asphodel_get_streaming_counts: [
+      "int",
+      [
+        ArrayType(StreamAndChannels),
+        "uint8",
+        "double",
+        "double",
+        "int*",
+        "int*",
+        "int*",
+      ],
+    ],
+  });
+}
