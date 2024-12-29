@@ -1,9 +1,14 @@
 import { loadAsphodelLibrary, TCP, USB } from "./asphodel";
 
+const libUsbPath =     //"/Users/carmelofiorello/Haptica/LibUsb/Upwork/asphodel/asphodel/builds/osx/arm64/libasphodel.dylib"
+  "C:\\Users\\Carmelo\\Desktop\\asphodel\\asphodel\\builds\\windows\\x64\\Asphodel64.dll";
+
 const main = async () => {
+  
+  process.env.PATH = `${process.env.PATH};C:\\Users\\Carmelo\\Desktop\\asphodel\\asphodel\\builds\\windows\\x64`;
   // use your own path here
   const lib = loadAsphodelLibrary(
-    "/Users/carmelofiorello/Haptica/LibUsb/Upwork/asphodel/asphodel/builds/osx/arm64/libasphodel.dylib"
+    libUsbPath
   );
   let usb = new USB(lib);
   let devices = await usb.findDevices(5);

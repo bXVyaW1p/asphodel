@@ -1,8 +1,8 @@
-import * as StructType from 'ref-struct-napi';
-import * as UnionType from 'ref-union-napi';
-import * as ArrayType from 'ref-array-napi'
-import * as ffi from 'ffi-napi';
-import * as ref from 'ref-napi';
+import StructType from 'ref-struct-napi';
+import UnionType from 'ref-union-napi';
+import ArrayType from 'ref-array-napi'
+import ffi from 'ffi-napi';
+import ref from 'ref-napi';
 
 //let dummy = loadAsphodelLibrary("");
 
