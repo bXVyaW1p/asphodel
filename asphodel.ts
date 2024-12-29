@@ -2358,7 +2358,7 @@ Close the device and release any shared resources (e.g. usb handles, tcp sockets
 
  */
     public stopStreamingPackets() {
-        checkForError(this.lib,this.inner.deref().stop_streaming_packets(this.inner));
+        this.inner.deref().stop_streaming_packets(this.inner);
     }
 /**
 
@@ -4273,7 +4273,6 @@ export function createDeviceDecoder(lib: any, stream_and_channels: StreamAndChan
     })
     
     let dec = ref.alloc(DeviceDecoderPtr);
-    console.log("555555555555555555: ", cib.length)
     checkForError(lib,lib.asphodel_create_device_decoder(cib, stream_and_channels.length, filler_bits, id_bits, dec));
     return new DeviceDecoderWrapper(lib, dec.deref())
 }

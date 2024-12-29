@@ -2,8 +2,8 @@ import { CHANNEL_TYPE_COMPOSITE_STRAIN, CHANNEL_TYPE_FAST_STRAIN, CHANNEL_TYPE_L
 import { API } from "./asphodel"
 import { loadAsphodelLibrary } from "./asphodel"
 
-const lib = loadAsphodelLibrary("/home/gg/Desktop/asphodel/build/libasphodel.so")
-//const lib = getTestLib();
+//const lib = loadAsphodelLibrary("/home/gg/Desktop/asphodel/build/libasphodel.so")
+const lib = getTestLib();
 
 const api = new API(lib)
 const version = new Version(lib);
@@ -49,56 +49,54 @@ function createDeviceInfo(device: DeviceWrapper) {
 }
 
 function main() {
-    while (true) {
-        let devices = usb.findDevices()
+    let devices = usb.findDevices()
 
-        if (devices.length == 0) {
-            console.log("No devices found!...")
-            return
+    if (devices.length == 0) {
+        console.log("No devices found!...")
+        return
+    }
+
+    console.log(`Found ${devices.length} devices!`)
+
+    devices.forEach((device) => {
+        device.open()
+        let info = createDeviceInfo(device)
+        console.log(`Enabling ${info.stream_count.count} streams `)
+
+        let response_time = 0.1;
+        let buffer_time = 0.5;
+        let timeout = 1000;
+        let streaming_counts = getStreamingCounts(lib, info.info_array, response_time, buffer_time, timeout)
+
+        console.log("Transfer count: ", streaming_counts.tranfer_count)
+        device.startStreamingPackets(streaming_counts.packet_count, streaming_counts.tranfer_count, streaming_counts.timeout,
+            (status, data, packet_size, packet_count) => {
+                if (status == 0) {
+                    for (let p = 0; p < packet_count; p++) {
+                        info.decoder.decode(data.slice(p * packet_size))
+                    }
+                } else {
+                    console.log(`Bad status ${status} in streaming callback`)
+                }
+            })
+
+
+
+        for (let j = 0; j < info.stream_count.count; j++) {
+            device.enableStream(info.info_array[j].stream_id, true)
         }
 
-        console.log(`Found ${devices.length} devices!`)
+        console.log(`Disabling: ${info.stream_count.count} streams from ${info.serial_number} `)
 
-        devices.forEach((device) => {
-            device.open()
-            let info = createDeviceInfo(device)
-            console.log(`Enabling ${info.stream_count.count} streams `)
+        for (let j = 0; j < info.stream_count.count; j++) {
+            device.enableStream(info.info_array[j].stream_id, false)
+        }
 
-            let response_time = 0.1;
-            let buffer_time = 0.5;
-            let timeout = 1000;
-            let streaming_counts = getStreamingCounts(lib, info.info_array, response_time, buffer_time, timeout)
-
-            console.log("Transfer count: ", streaming_counts.tranfer_count)
-            device.startStreamingPackets(streaming_counts.packet_count, streaming_counts.tranfer_count, streaming_counts.timeout,
-                (status, data, packet_size, packet_count) => {
-                    if (status == 0) {
-                        for (let p = 0; p < packet_count; p++) {
-                            info.decoder.decode(data.slice(p * packet_size))
-                        }
-                    } else {
-                        console.log(`Bad status ${status} in streaming callback`)
-                    }
-                })
-
-
-
-            for (let j = 0; j < info.stream_count.count; j++) {
-                device.enableStream(info.info_array[j].stream_id, true)
-            }
-
-            console.log(`Disabling: ${info.stream_count.count} streams from ${info.serial_number} `)
-
-            for (let j = 0; j < info.stream_count.count; j++) {
-                device.enableStream(info.info_array[j].stream_id, false)
-            }
-
-            device.stopStreamingPackets();
-            device.poll(10);
-            device.close();
-            device.free()
-        })
-    }
+        device.stopStreamingPackets();
+        device.poll(10);
+        device.close();
+        device.free()
+    })
 }
 
 main()
