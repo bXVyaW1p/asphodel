@@ -12,7 +12,7 @@ const main = async () => {
   );
   console.log("Library loaded");
   let usb = new USB(lib);
-  let devices = usb.findDevices();
+  let devices = await usb.findDevices();
 
   console.log("Found USB devices: ", devices.length);
 
