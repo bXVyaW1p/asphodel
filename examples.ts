@@ -4,25 +4,26 @@ const libUsbPath =     //"/Users/carmelofiorello/Haptica/LibUsb/Upwork/asphodel/
   "C:\\Users\\Carmelo\\Desktop\\asphodel\\asphodel\\builds\\windows\\x64\\Asphodel64.dll";
 
 const main = async () => {
-  
+
   process.env.PATH = `${process.env.PATH};C:\\Users\\Carmelo\\Desktop\\asphodel\\asphodel\\builds\\windows\\x64`;
   // use your own path here
   const lib = loadAsphodelLibrary(
     libUsbPath
   );
+  console.log("Library loaded");
   let usb = new USB(lib);
-  let devices = await usb.findDevices(5);
+  let devices = usb.findDevices();
 
-  console.log("Found devices: ", devices.length);
+  console.log("Found USB devices: ", devices.length);
 
   for (const device of devices) {
     device.open();
-    const deviceInfo = await device.getBoardInfo();
+    const deviceInfo = device.getBoardInfo();
     console.log("Device info: ", deviceInfo);
-    await device.setRGBValues(0, { r: 0, g: 255, b: 0 }, true);
+    device.setRGBValues(0, { r: 0, g: 255, b: 0 }, true);
     // print all channels
 
-    const all = await device.getStreamCount();
+    const all = device.getStreamCount();
 
     console.log("Channels all: ", all);
   }
@@ -35,15 +36,17 @@ const main = async () => {
   usb.deinit();
 
   let tcp = new TCP(lib);
-  tcp.findDevices(5).then((devices) => {
-    devices.forEach((d) => {
-      d.open();
-    });
-    devices.forEach((d) => {
-      d.close();
-      d.free();
-    });
+  const tcpDevices = tcp.findDevices();
+  console.log("Found TCP devices: ", tcpDevices.length);
+
+  tcpDevices.forEach((d) => {
+    d.open();
   });
+  tcpDevices.forEach((d) => {
+    d.close();
+    d.free();
+  });
+
 };
 
 main();
