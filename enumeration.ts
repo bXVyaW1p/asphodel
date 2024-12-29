@@ -179,13 +179,12 @@ function printSupplyInfo(dev: DeviceWrapper) {
     }
 }
 
-async function printDecoderInfo(device: DeviceWrapper) {
+function printDecoderInfo(device: DeviceWrapper) {
     let count = device.getStreamCount()
     let streamchannel: StreamAndChannelsWrapper[] = []
 
     for (let i = 0; i < count.count; i++) {
-        let stream = await device.getStream(i)
-        //then((stream)=>{
+        let stream = device.getStream(i)
         let channels: ChannelInfoWrapper[] = []
         if (stream.getChannelCount() == 0) {
             throw new Error(`Error: stream ${i} has 0 channels!`)

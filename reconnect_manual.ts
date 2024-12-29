@@ -2,8 +2,8 @@ import { CHANNEL_TYPE_COMPOSITE_STRAIN, CHANNEL_TYPE_FAST_STRAIN, CHANNEL_TYPE_L
 import { API } from "./asphodel"
 import { loadAsphodelLibrary } from "./asphodel"
 
-//const lib = loadAsphodelLibrary("/home/gg/Desktop/asphodel/build/libasphodel.so")
-const lib = getTestLib();
+const lib = loadAsphodelLibrary("/home/gg/Desktop/asphodel/build/libasphodel.so")
+//const lib = getTestLib();
 
 const api = new API(lib)
 const version = new Version(lib);
