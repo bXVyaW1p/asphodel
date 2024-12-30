@@ -356,7 +356,8 @@ const proto_error_callback= koffi.proto("int error_callback(void * device, int s
 const proto_reconnect_device_bootloader= koffi.proto("int reconnect_device_bootloader(void * device, void **reconnected_device)")
 const proto_reconnect_device_application= koffi.proto("int reconnect_device_application(void * device, void **reconnected_device)")
 
-const lib = koffi.load("./example.so")
+const lib = koffi.load("/Users/carmelofiorello/Haptica/LibUsb/Upwork/asphodel/asphodel/builds/osx/arm64/libasphodel.dylib")
+
 
 
 //=============================================================================
@@ -1275,10 +1276,10 @@ class USB {
 
       let devices: DeviceWrapper[] = [];
 
-      console.log(list[0])
-      //let device_inners = koffi.decode(list, koffi.pointer(Device), koffi.decode(lenPtr, "size_t"))
+      console.log("devides",list[0])
+      let device_inners = koffi.decode(list, koffi.pointer(Device), koffi.decode(lenPtr, "size_t"))
 
-      //console.log(device_inners)
+      console.log(device_inners)
 
         //for(let i = 0; i < koffi.decode(lenPtr, "size_t"); i++) {
             //console.log("============")
