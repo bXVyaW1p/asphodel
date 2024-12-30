@@ -781,6 +781,7 @@ const asphodel_get_rf_power_ctrl_vars_blocking = lib.func('int asphodel_get_rf_p
 const asphodel_reset_rf_power_timeout_blocking = lib.func('int asphodel_reset_rf_power_timeout_blocking(AsphodelDevice_t *device, uint32_t timeout)');
 
 //========================================================================================
+
 const asphodel_usb_devices_supported = lib.func('int asphodel_usb_devices_supported()');
 const asphodel_usb_init = lib.func('int asphodel_usb_init()');
 const asphodel_usb_deinit = lib.func('void asphodel_usb_deinit()');
@@ -1218,3 +1219,95 @@ export class DeviceWrapper {
         this.inner = inner; 
     }
 }
+
+
+class USB {
+    /** initialize the USB portion of the library. MUST be called before asphodel_usb_find_devices()**/
+    public static init() {
+        checkForError(asphodel_usb_init())
+    }
+
+    /** close down the USB portion of the library. asphodel_usb_init() can be called afterwards, if needed later.
+     */
+    public static deinit() {
+        asphodel_usb_deinit();
+    }
+
+
+    /** returns true if the library has been build with USB device support (-DASPHODEL_USB_DEVICE), and false otherwise.
+     */
+    public static supported(): boolean {
+        if (asphodel_usb_devices_supported() == 0) {
+            return false;
+        }
+        return true
+    }
+
+    /** Poll all USB devices at once. Implementation note: each USB device's poll_device() will poll all devices. This
+    function is provided for code readability when polling multiple devices. */
+
+    public static poll(milliseconds: number) {
+        checkForError(asphodel_usb_poll_devices(milliseconds))
+    }
+
+    /** Return the version string for the running version of the usb backend (libusb-1.0 in current implementations)
+     */
+    public static backendVersion() {
+        return asphodel_usb_get_backend_version()
+    }
+
+    /** Find any Asphodel devices attached to the system via USB. The device_list parameter should be an array of
+    AsphodelDevice_t pointers, with the array size pointed to by list_size. The array will be filled with pointers
+    to AsphodelDevice_t structs, up to the array length. The total number of found USB devices will be written into
+    the address pointed to by list_size. ALL returned devices must be freed (either immediately or at a later point)
+    by the calling code by calling the AsphodelDevice_t free_device function pointer.
+    */
+    public static findDevices() {
+        let lenPtr = koffi.alloc("size_t", 1);
+        
+        checkForError(asphodel_usb_find_devices(null, lenPtr))
+
+        const len = koffi.decode(lenPtr, "size_t");
+        
+        let list = Buffer.alloc( len * koffi.sizeof(koffi.pointer(Device)))
+        //let list = [{}]
+        asphodel_usb_find_devices(list, lenPtr)
+
+      let devices: DeviceWrapper[] = [];
+
+      console.log(list[0])
+      //let device_inners = koffi.decode(list, koffi.pointer(Device), koffi.decode(lenPtr, "size_t"))
+
+      //console.log(device_inners)
+
+        //for(let i = 0; i < koffi.decode(lenPtr, "size_t"); i++) {
+            //console.log("============")
+            //let b = .alloc(ref.refType(Device));
+            //if(ffi.types.size_t.size == 4) {
+            //    if(os.endianness() == "BE") {
+            //        b.writeUInt32BE(list.readUInt32BE(i * 4))
+            //        devices.push(new DeviceWrapper(this.lib, b.deref()))
+            //    } else {
+            //        b.writeUInt32LE(list.readUInt32LE(i * 4))
+            //        devices.push(new DeviceWrapper(this.lib, b.deref()))
+            //    }
+            //} else {
+            //    if(os.endianness() == "BE") {
+            //        b.writeBigUInt64BE(list.readBigUInt64BE(i * 8))
+            //        devices.push(new DeviceWrapper(this.lib, b.deref()))
+            //    } else {
+            //        b.writeBigUInt64LE(list.readBigUInt64LE(i * 8))
+            //        devices.push(new DeviceWrapper(this.lib, b.deref()))
+            //    }
+            //}
+        //}
+        return devices;
+    }//
+
+}
+
+USB.init()
+
+console.log(USB.backendVersion())
+USB.findDevices()
+
